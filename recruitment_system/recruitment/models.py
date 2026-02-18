@@ -1,7 +1,7 @@
+import os
 from django.db import models
-from django.contrib.auth.models import AbstractUser
 
-# Modèle User (Extension du modèle de base pour inclure le rôle)
+
 class User(models.Model):
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=255)
@@ -10,9 +10,8 @@ class User(models.Model):
     def __str__(self):
         return self.email
 
-# Modèle Candidat
+
 class Candidat(models.Model):
-    # Relation 1..1 avec User (user ForeignKey)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     nom = models.CharField(max_length=100)
     prenom = models.CharField(max_length=100)
@@ -23,7 +22,7 @@ class Candidat(models.Model):
     def __str__(self):
         return f"{self.prenom} {self.nom}"
 
-# Modèle Offre
+
 class Offre(models.Model):
     titre = models.CharField(max_length=255)
     description = models.TextField()
@@ -34,14 +33,51 @@ class Offre(models.Model):
     def __str__(self):
         return self.titre
 
-# Modèle Candidature
+
 class Candidature(models.Model):
-    # Relations Foreign Key (0..* dans le diagramme)
     candidat = models.ForeignKey(Candidat, on_delete=models.CASCADE)
     offre = models.ForeignKey(Offre, on_delete=models.CASCADE)
     statut = models.CharField(max_length=50, default='En attente')
     score = models.FloatField(default=0.0)
     date_postulation = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        try:
+            import fitz
+            import re
+
+            if self.candidat.cv_path:
+                text_cv = ""
+                with fitz.open(self.candidat.cv_path.path) as doc:
+                    for page in doc:
+                        # استخراج النص وتحويله لحروف صغيرة لضمان المطابقة
+                        text_cv += page.get_text().lower()
+
+                # تنظيف النص (يدعم العربية والإنجليزية) لتوحيد المسافات
+                text_cv = re.sub(r'\s+', ' ', text_cv)
+
+                # تحويل المتطلبات إلى قائمة (تأكد من الفصل بينها بفاصلة في الـ Admin)
+                # مثال: Python, Power BI, SQL, الإحصاء
+                raw_skills = self.offre.competences_requises.split(',')
+                skills_to_find = [s.strip().lower() for s in raw_skills if s.strip()]
+
+                if skills_to_find:
+                    matches = 0
+                    for skill in skills_to_find:
+                        # البحث المباشر عن الكلمة (فعال جداً للعربية والإنجليزية)
+                        if skill in text_cv:
+                            matches += 1
+
+                    # السكور = (المهارات الموجودة / المهارات المطلوبة) * 100
+                    self.score = round((matches / len(skills_to_find)) * 100, 2)
+                    print(f"DEBUG: Found {matches} out of {len(skills_to_find)} skills.")
+                else:
+                    self.score = 0.0
+        except Exception as e:
+            print(f"ERROR CV Analysis: {e}")
+            self.score = 0.0
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Candidature de {self.candidat} pour {self.offre}"
