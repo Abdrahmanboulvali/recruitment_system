@@ -22,3 +22,16 @@ class CandidatureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidature
         fields = '__all__'
+
+class DashboardStatsSerializer(serializers.Serializer):
+    total_offres = serializers.IntegerField()
+    total_candidatures = serializers.IntegerField()
+    avg_score = serializers.FloatField()
+    distribution = serializers.DictField()
+    offres_analytics = serializers.ListField()
+
+from djoser.serializers import UserSerializer as BaseUserSerializer
+
+class UserSerializer(BaseUserSerializer):
+    class Meta(BaseUserSerializer.Meta):
+        fields = ('id', 'email', 'username', 'role') # إضافة الـ role هنا

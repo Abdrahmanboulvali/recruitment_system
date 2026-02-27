@@ -20,10 +20,18 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('recruitment.urls')), # Tous les APIs seront sous /api/
+
+    # Chemins d'authentification de base (inscription, connexion, etc.)
+    path('auth/', include('djoser.urls')),
+    # Méthodes de gestion des jetons JWT
+    path('auth/', include('djoser.urls.jwt')),
+
+
 ]
 
 if settings.DEBUG:
