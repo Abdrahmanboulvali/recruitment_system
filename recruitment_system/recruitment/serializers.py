@@ -15,13 +15,9 @@ class CandidatSerializer(serializers.ModelSerializer):
 
 # Convertir le modèle Candidature en JSON
 class CandidatureSerializer(serializers.ModelSerializer):
-    # Afficher les détails au lieu des IDs (Optionnel)
-    candidat_name = serializers.ReadOnlyField(source='candidat.nom')
-    offre_titre = serializers.ReadOnlyField(source='offre.titre')
-
     class Meta:
         model = Candidature
-        fields = '__all__'
+        fields = ['id', 'candidat', 'offre', 'cv_file', 'statut', 'score', 'date_postulation']
 
 class DashboardStatsSerializer(serializers.Serializer):
     total_offres = serializers.IntegerField()

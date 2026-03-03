@@ -65,6 +65,17 @@ def list_offres(request):
     serializer = OffreSerializer(offres, many=True)
     return Response(serializer.data)
 
+# recruitment/views.py
+from rest_framework import generics
+from .models import User # أو اسم موديل المستخدم لديك
+from .serializers import UserSerializer
+from rest_framework.permissions import IsAdminUser
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAdminUser] # للسماح للمسؤولين فقط برؤية القائمة
+
 
 # --- ViewSets لإدارة البيانات عبر API ---
 class OffreViewSet(viewsets.ModelViewSet):

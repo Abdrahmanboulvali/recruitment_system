@@ -5,6 +5,11 @@ import Dashboard from './components/Dashboard';
 import EspaceCandidat from './components/EspaceCandidat';
 import Register from './components/Register';
 import Navbar from './components/Navbar';
+import Postuler from './components/Postuler';
+import MesCandidatures from './components/MesCandidatures';
+import ManageOffres from './components/ManageOffres';
+import ManageCandidatures from './components/ManageCandidatures';
+import Users from './components/Users';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const role = localStorage.getItem('role');
@@ -28,6 +33,12 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/unauthorized" element={<div style={{textAlign: 'center', marginTop: '50px'}}><h2>Accès non autorisé !</h2></div>} />
+        <Route path="/postuler/:offreId" element={<Postuler />} />
+        <Route path="/espace-candidat" element={<EspaceCandidat />} />
+        <Route path="/mes-candidatures" element={<MesCandidatures />} />
+        <Route path="/manage-offres" element={<ManageOffres />} />
+        <Route path="/manage-candidatures" element={<ManageCandidatures />} />
+        <Route path="/users" element={<Users />} />
 
         {/* مسار المترشح: يشمل كل صيغ كلمة Candidat */}
         <Route path="/espace-candidat" element={

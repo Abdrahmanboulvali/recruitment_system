@@ -57,7 +57,7 @@ class Candidat(models.Model):
     prenom = models.CharField(max_length=100)
     diplome = models.CharField(max_length=255)
     experience = models.IntegerField()
-    cv_path = models.FileField(upload_to='cvs/')
+    cv_file = models.FileField(upload_to='cvs/')
 
     def __str__(self):
         return f"{self.prenom} {self.nom}"
@@ -74,51 +74,53 @@ class Offre(models.Model):
         return self.titre
 
 
+# recruitment/models.py
+import re
+import fitz  # PyMuPDF
+from django.db import models
+
+
 class Candidature(models.Model):
-    candidat = models.ForeignKey(Candidat, on_delete=models.CASCADE)
-    offre = models.ForeignKey(Offre, on_delete=models.CASCADE)
-    statut = models.CharField(max_length=50, default='En attente')
+    STATUS_CHOICES = [
+        ('En attente', 'En attente'),
+        ('Accepté', 'Accepté'),
+        ('Refusé', 'Refusé'),
+    ]
+
+    candidat = models.ForeignKey('Candidat', on_delete=models.CASCADE)
+    offre = models.ForeignKey('Offre', on_delete=models.CASCADE)
+    # أضفنا null=True لتجاوز الخطأ الظاهر في Terminal
+    cv_file = models.FileField(upload_to='cv_submissions/', null=True, blank=True)
+    statut = models.CharField(max_length=50, choices=STATUS_CHOICES, default='En attente')
     score = models.FloatField(default=0.0)
     date_postulation = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        try:
-            import fitz  # PyMuPDF
-
-            if self.candidat.cv_path:
+        # منطق تحليل الـ CV باستخدام PyMuPDF
+        if self.cv_file and not self.pk:
+            try:
                 text_cv = ""
-                with fitz.open(self.candidat.cv_path.path) as doc:
+                with fitz.open(stream=self.cv_file.read(), filetype="pdf") as doc:
                     for page in doc:
                         text_cv += page.get_text().lower()
 
                 text_cv = re.sub(r'\s+', ' ', text_cv)
+                skills_required = [s.strip().lower() for s in self.offre.competences_requises.split(',') if s.strip()]
 
-                raw_skills = self.offre.competences_requises.split(',')
-                skills_to_find = [s.strip().lower() for s in raw_skills if s.strip()]
-
-                if skills_to_find:
-                    matches = 0
-                    for skill in skills_to_find:
-                        if skill in text_cv:
-                            matches += 1
-
-                    self.score = round((matches / len(skills_to_find)) * 100, 2)
-                else:
-                    self.score = 0.0
-        except Exception as e:
-            print(f"ERROR CV Analysis: {e}")
-            self.score = 0.0
+                if skills_required:
+                    matches = sum(1 for skill in skills_required if skill in text_cv)
+                    self.score = round((matches / len(skills_required)) * 100, 2)
+            except Exception as e:
+                print(f"Analysis Error: {e}")
 
         super().save(*args, **kwargs)
 
     @property
-    def pertinence_label(self):
-        if self.score >= 75:
-            return "Fortement Pertinente"
-        elif 40 <= self.score < 75:
-            return "Pertinente"
-        else:
-            return "Faiblement Pertinente"
+    def pertinence(self):
+        """هذا ما سيراه المدير في الـ Dashboard"""
+        if self.score >= 75: return "Fortement Pertinente"
+        if self.score >= 40: return "Pertinente"
+        return "Faiblement Pertinente"
 
     def __str__(self):
-        return f"Candidature de {self.candidat} pour {self.offre}"
+        return f"{self.candidat} - {self.offre}"
