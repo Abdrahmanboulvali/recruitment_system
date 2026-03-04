@@ -22,61 +22,126 @@ const ManageOffres = () => {
         try {
             const res = await axios.get('http://127.0.0.1:8000/api/offres/', config);
             setOffres(res.data);
-        } catch (err) { console.error("Erreur chargement offres"); }
+        } catch (err) {
+            console.error("Erreur chargement offres");
+        }
     };
 
     const handleCreate = async (e) => {
         e.preventDefault();
         try {
             await axios.post('http://127.0.0.1:8000/api/offres/', newOffre, config);
-            alert("Offre ajoutée avec succès !");
             setNewOffre({ titre: '', description: '', experience_min: 0, competences_requises: '' });
             setShowForm(false);
             fetchOffres();
-        } catch (err) { alert("Erreur lors de l'ajout"); }
+        } catch (err) {
+            alert("Erreur lors de l'ajout");
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (window.confirm("Voulez-vous supprimer cette offre ?")) {
+            try {
+                await axios.delete(`http://127.0.0.1:8000/api/offres/${id}/`, config);
+                fetchOffres();
+            } catch (err) {
+                alert("Erreur lors de la suppression");
+            }
+        }
     };
 
     return (
-        <div style={{ padding: '30px', maxWidth: '1000px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2>Gestion des Offres d'Emploi</h2>
+        <div style={styles.pageWrapper}>
+            <div style={styles.topBar}>
+                <div style={styles.titleSection}>
+                    <h2 style={styles.mainTitle}>Gestion des Offres</h2>
+                    <p style={styles.subTitle}>Publiez et gérez les opportunités d'emploi disponibles</p>
+                </div>
                 <button
                     onClick={() => setShowForm(!showForm)}
-                    style={{ padding: '10px 20px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+                    style={styles.toggleBtn(showForm)}
                 >
-                    {showForm ? "Fermer" : "+ Ajouter une Offre"}
+                    {showForm ? "✕ Fermer" : "+ Nouvelle Offre"}
                 </button>
             </div>
 
             {showForm && (
-                <form onSubmit={handleCreate} style={formStyle}>
-                    <h3>Nouvelle Offre</h3>
-                    <input style={inputStyle} placeholder="Titre du poste" required onChange={e => setNewOffre({...newOffre, titre: e.target.value})} />
-                    <input type="number" style={inputStyle} placeholder="Expérience min (ans)" required onChange={e => setNewOffre({...newOffre, experience_min: e.target.value})} />
-                    <textarea style={{...inputStyle, height: '100px'}} placeholder="Description du poste" required onChange={e => setNewOffre({...newOffre, description: e.target.value})} />
-                    <button type="submit" style={submitButtonStyle}>Publier l'Offre</button>
-                </form>
+                <div style={styles.glassForm}>
+                    <h3 style={styles.formTitle}>
+                        <span>📌</span> Détails de la nouvelle offre
+                    </h3>
+                    <form onSubmit={handleCreate}>
+                        <div style={styles.inputGrid}>
+                            <div style={styles.fieldContainer}>
+                                <label style={styles.label}>💼 Titre du poste</label>
+                                <input
+                                    style={styles.glassInput}
+                                    placeholder="Ex: Développeur Fullstack Python"
+                                    required
+                                    value={newOffre.titre}
+                                    onChange={e => setNewOffre({...newOffre, titre: e.target.value})}
+                                />
+                            </div>
+
+                            <div style={{...styles.fieldContainer, flex: '0 1 200px'}}>
+                                <label style={styles.label}>⏳ Expérience min (ans)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    style={styles.glassInput}
+                                    placeholder="0"
+                                    required
+                                    value={newOffre.experience_min}
+                                    onChange={e => setNewOffre({...newOffre, experience_min: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
+                        <div style={{...styles.fieldContainer, marginTop: '25px'}}>
+                            <label style={styles.label}>📝 Description du poste</label>
+                            <textarea
+                                style={styles.glassTextarea}
+                                placeholder="Décrivez les missions..."
+                                required
+                                value={newOffre.description}
+                                onChange={e => setNewOffre({...newOffre, description: e.target.value})}
+                            />
+                        </div>
+
+                        <button type="submit" style={styles.submitBtn}>🚀 Publier l'offre</button>
+                    </form>
+                </div>
             )}
 
-            <div style={{ marginTop: '20px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: 'white' }}>
+            <div style={styles.tableCard}>
+                <table style={styles.table}>
                     <thead>
-                        <tr style={{ backgroundColor: '#343a40', color: 'white' }}>
-                            <th style={tdStyle}>Titre</th>
-                            <th style={tdStyle}>Expérience</th>
-                            <th style={tdStyle}>Actions</th>
+                        <tr style={styles.headerRow}>
+                            <th style={styles.th}>Poste</th>
+                            <th style={styles.th}>Expérience</th>
+                            <th style={{...styles.th, textAlign: 'center'}}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {offres.map(o => (
-                            <tr key={o.id} style={{ borderBottom: '1px solid #ddd' }}>
-                                <td style={tdStyle}>{o.titre}</td>
-                                <td style={tdStyle}>{o.experience_min} ans</td>
-                                <td style={tdStyle}>
-                                    <button style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer' }}>Supprimer</button>
+                        {offres.length > 0 ? offres.map(o => (
+                            <tr key={o.id} style={styles.tr}>
+                                <td style={{...styles.td, fontWeight: '600'}}>{o.titre}</td>
+                                <td style={styles.td}>
+                                    <span style={styles.expBadge}>{o.experience_min} ans min</span>
+                                </td>
+                                <td style={{...styles.td, textAlign: 'center'}}>
+                                    <button onClick={() => handleDelete(o.id)} style={styles.deleteBtn}>
+                                        🗑️ Supprimer
+                                    </button>
                                 </td>
                             </tr>
-                        ))}
+                        )) : (
+                            <tr>
+                                <td colSpan="3" style={{...styles.td, textAlign: 'center', opacity: 0.5}}>
+                                    Aucune offre disponible.
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -84,10 +149,73 @@ const ManageOffres = () => {
     );
 };
 
-// Styles
-const formStyle = { background: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #ddd', marginBottom: '20px' };
-const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '4px', border: '1px solid #ccc' };
-const submitButtonStyle = { width: '100%', padding: '12px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' };
-const tdStyle = { padding: '12px', textAlign: 'left' };
+// التنسيقات المحدثة لتدعم الوضعين (Light & Dark) تلقائياً
+const styles = {
+    pageWrapper: {
+        padding: '40px 20px',
+        maxWidth: '1100px',
+        margin: '0 auto',
+        minHeight: '100vh',
+        color: 'inherit' // سيأخذ اللون من الـ Body (أسود في النهار وأبيض في الليل)
+    },
+    topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' },
+    mainTitle: { fontSize: '32px', fontWeight: '800', margin: 0, color: 'inherit' },
+    subTitle: { opacity: 0.7, margin: 0, color: 'inherit' },
+    toggleBtn: (isOpen) => ({
+        padding: '12px 25px',
+        backgroundColor: isOpen ? 'rgba(239, 68, 68, 0.1)' : '#6366f1',
+        color: isOpen ? '#ef4444' : 'white',
+        border: isOpen ? '1px solid #ef4444' : 'none',
+        borderRadius: '12px',
+        fontWeight: 'bold',
+        cursor: 'pointer'
+    }),
+    glassForm: {
+        background: 'rgba(120, 120, 120, 0.05)', // خلفية شفافة رمادية تعمل في الوضعين
+        backdropFilter: 'blur(20px)',
+        padding: '40px',
+        borderRadius: '24px',
+        border: '1px solid rgba(150, 150, 150, 0.2)',
+        marginBottom: '40px'
+    },
+    formTitle: { marginBottom: '30px', color: '#6366f1', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px' },
+    inputGrid: { display: 'flex', gap: '25px', flexWrap: 'wrap' },
+    fieldContainer: { display: 'flex', flexDirection: 'column', flex: 1, gap: '12px' },
+    label: { fontSize: '14px', fontWeight: '600', color: 'inherit', opacity: 0.8 },
+    glassInput: {
+        padding: '16px',
+        borderRadius: '14px',
+        border: '1px solid rgba(150, 150, 150, 0.3)',
+        background: 'rgba(150, 150, 150, 0.05)',
+        color: 'inherit', // يضمن ظهور النص المكتوب بوضوح
+        fontSize: '15px',
+        outline: 'none'
+    },
+    glassTextarea: {
+        padding: '16px',
+        borderRadius: '14px',
+        border: '1px solid rgba(150, 150, 150, 0.3)',
+        background: 'rgba(150, 150, 150, 0.05)',
+        color: 'inherit',
+        fontSize: '15px',
+        height: '150px',
+        resize: 'none',
+        outline: 'none'
+    },
+    submitBtn: { width: '100%', marginTop: '30px', padding: '16px', backgroundColor: '#6366f1', color: 'white', borderRadius: '14px', fontWeight: '800', border: 'none', cursor: 'pointer' },
+    tableCard: {
+        background: 'rgba(150, 150, 150, 0.05)',
+        borderRadius: '24px',
+        border: '1px solid rgba(150, 150, 150, 0.2)',
+        overflow: 'hidden'
+    },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    headerRow: { background: 'rgba(99, 102, 241, 0.1)' },
+    th: { padding: '20px', textAlign: 'left', color: 'inherit', fontSize: '13px', textTransform: 'uppercase' },
+    tr: { borderBottom: '1px solid rgba(150, 150, 150, 0.1)', color: 'inherit' },
+    td: { padding: '20px', color: 'inherit' },
+    expBadge: { padding: '5px 12px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold' },
+    deleteBtn: { padding: '8px 15px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }
+};
 
 export default ManageOffres;

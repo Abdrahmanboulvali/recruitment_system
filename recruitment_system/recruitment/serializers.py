@@ -17,6 +17,7 @@ class CandidatSerializer(serializers.ModelSerializer):
 class CandidatureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidature
+        # تحديد الحقول يضمن أن 'statut' قابل للتعديل (Writeable)
         fields = ['id', 'candidat', 'offre', 'cv_file', 'statut', 'score', 'date_postulation']
 
 class DashboardStatsSerializer(serializers.Serializer):

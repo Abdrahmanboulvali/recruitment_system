@@ -76,6 +76,13 @@ class UserListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [IsAdminUser] # للسماح للمسؤولين فقط برؤية القائمة
 
+def patch(self, request, pk):
+    instance = self.get_object(pk)
+    serializer = CandidatureSerializer(instance, data=request.data, partial=True) # partial=True ضرورية للـ PATCH
+    if serializer.is_valid():
+        serializer.save() # هنا يتم الحفظ الفعلي في قاعدة البيانات
+        return Response(serializer.data)
+    return Response(serializer.errors, status=400)
 
 # --- ViewSets لإدارة البيانات عبر API ---
 class OffreViewSet(viewsets.ModelViewSet):
