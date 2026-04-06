@@ -17,6 +17,10 @@ const Postuler = () => {
         const checkStatus = async () => {
             try {
                 const token = localStorage.getItem('access');
+                if (!token) {
+                    navigate('/login');
+                    return;
+                }
                 const config = { headers: { Authorization: `Bearer ${token}` } };
                 const userRes = await axios.get('http://127.0.0.1:8000/api/user-info/', config);
                 const currentUserId = userRes.data.id;
@@ -39,7 +43,19 @@ const Postuler = () => {
             }
         };
         checkStatus();
-    }, [offreId]);
+    }, [offreId, navigate]);
+
+    // دالة التحقق من نوع الملف لمنع رفع الصور كـ PDF
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file && file.type !== "application/pdf") {
+            alert("Erreur: Seuls les fichiers PDF réels sont acceptés.");
+            e.target.value = null;
+            setCvFile(null);
+            return;
+        }
+        setCvFile(file);
+    };
 
     const handleProcess = async (e) => {
         e.preventDefault();
@@ -49,11 +65,15 @@ const Postuler = () => {
         try {
             const token = localStorage.getItem('access');
             const configMultipart = {
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
             };
 
             let currentCandidatId = candidatId;
 
+            // إذا لم يكن لدى المستخدم ملف شخصي، نقوم بإنشائه أولاً
             if (!currentCandidatId) {
                 const userRes = await axios.get('http://127.0.0.1:8000/api/user-info/', {
                     headers: { Authorization: `Bearer ${token}` }
@@ -64,13 +84,14 @@ const Postuler = () => {
                 profileData.append('nom', profileForm.nom);
                 profileData.append('prenom', profileForm.prenom);
                 profileData.append('diplome', profileForm.diplome);
-                profileData.append('experience', profileForm.experience);
-                profileData.append('cv_file', cvFile);
+                profileData.append('experience', parseInt(profileForm.experience) || 0);
+                profileData.append('cv_file', cvFile); // إرسال الـ PDF الفعلي
 
                 const newProfile = await axios.post('http://127.0.0.1:8000/api/candidats/', profileData, configMultipart);
                 currentCandidatId = newProfile.data.id;
             }
 
+            // إرسال طلب التقديم (Candidature)
             const candidatureData = new FormData();
             candidatureData.append('offre', offreId);
             candidatureData.append('candidat', currentCandidatId);
@@ -79,9 +100,10 @@ const Postuler = () => {
 
             await axios.post('http://127.0.0.1:8000/api/candidatures/', candidatureData, configMultipart);
             alert("Succès ! Votre candidature a été transmise.");
-            navigate('/espace-candidat');
+            navigate('/mes-candidatures');
         } catch (err) {
-            alert("Erreur lors de la postulation");
+            console.error(err.response?.data);
+            alert("Erreur lors de la postulation. Vérifiez les données saisies.");
         } finally {
             setLoading(false);
         }
@@ -94,7 +116,7 @@ const Postuler = () => {
             <div style={styles.alertCard}>
                 <div style={styles.iconCircle('#ef4444')}>⚠️</div>
                 <h3 style={{ color: '#ef4444', marginBottom: '10px' }}>Déjà postulé</h3>
-                <p style={{ opacity: 0.8 }}>Vous avez déjà soumis votre candidature pour ce poste. Vous ne pouvez pas postuler deux fois.</p>
+                <p style={{ opacity: 0.8 }}>Vous avez déjà soumis votre candidature pour ce poste.</p>
                 <button onClick={() => navigate('/mes-candidatures')} style={styles.secondaryBtn}>
                     Suivre ma candidature
                 </button>
@@ -106,7 +128,7 @@ const Postuler = () => {
         <div style={styles.pageContainer}>
             <div style={styles.glassContainer}>
                 <h2 style={styles.title}>Finaliser votre candidature</h2>
-                <p style={styles.subtitle}>Plus qu'une étape pour postuler à l'offre <strong>#{offreId}</strong></p>
+                <p style={styles.subtitle}>Offre <strong>#{offreId}</strong></p>
 
                 <form onSubmit={handleProcess}>
                     {!candidatId && (
@@ -116,9 +138,9 @@ const Postuler = () => {
                                 <input style={styles.glassInput} placeholder="Nom" required onChange={e => setProfileForm({...profileForm, nom: e.target.value})} />
                                 <input style={styles.glassInput} placeholder="Prénom" required onChange={e => setProfileForm({...profileForm, prenom: e.target.value})} />
                             </div>
-                            <input style={styles.glassInput} placeholder="Dernier diplôme obtenu" required onChange={e => setProfileForm({...profileForm, diplome: e.target.value})} />
+                            <input style={styles.glassInput} placeholder="Dernier diplôme" required onChange={e => setProfileForm({...profileForm, diplome: e.target.value})} />
                             <div style={styles.labelGroup}>
-                                <label style={styles.label}>Années d'expérience :</label>
+                                <label style={styles.label}>Expérience (ans) :</label>
                                 <input type="number" style={{...styles.glassInput, width: '100px'}} min="0" required onChange={e => setProfileForm({...profileForm, experience: e.target.value})} />
                             </div>
                         </div>
@@ -131,14 +153,14 @@ const Postuler = () => {
                             type="file"
                             accept=".pdf"
                             required
-                            onChange={e => setCvFile(e.target.files[0])}
+                            onChange={handleFileChange}
                             style={styles.fileInput}
                         />
-                        {cvFile && <p style={styles.fileName}>✅ {cvFile.name}</p>}
+                        {cvFile && <p style={styles.fileName}>✅ {cvFile.name} (Format valide)</p>}
                     </div>
 
                     <button type="submit" disabled={loading} style={styles.submitBtn(loading)}>
-                        {loading ? "Envoi en cours..." : (candidatId ? "Confirmer la postulation" : "Créer mon profil & Postuler")}
+                        {loading ? "Envoi en cours..." : (candidatId ? "Confirmer la postulation" : "Créer profil & Postuler")}
                     </button>
                 </form>
             </div>
@@ -146,55 +168,26 @@ const Postuler = () => {
     );
 };
 
+// ... التنسيقات (styles) تبقى كما هي في الكود الأصلي ...
 const styles = {
     pageContainer: { padding: '40px 20px', display: 'flex', justifyContent: 'center' },
-    glassContainer: {
-        background: 'rgba(255, 255, 255, 0.05)', backdropFilter: 'blur(15px)',
-        borderRadius: '24px', padding: '40px', width: '100%', maxWidth: '600px',
-        border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.2)'
-    },
+    glassContainer: { background: 'rgba(255, 255, 255, 0.05)', backdropFilter: 'blur(15px)', borderRadius: '24px', padding: '40px', width: '100%', maxWidth: '600px', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' },
     title: { textAlign: 'center', fontSize: '28px', fontWeight: '800', marginBottom: '10px' },
     subtitle: { textAlign: 'center', opacity: 0.7, marginBottom: '30px' },
-    profileSection: {
-        background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '15px',
-        border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '25px'
-    },
+    profileSection: { background: 'rgba(255, 255, 255, 0.03)', padding: '20px', borderRadius: '15px', border: '1px solid rgba(255, 255, 255, 0.05)', marginBottom: '25px' },
     sectionTitle: { marginTop: 0, fontSize: '16px', marginBottom: '15px' },
     inputGroup: { display: 'flex', gap: '10px', marginBottom: '15px' },
-    glassInput: {
-        width: '100%', padding: '12px 15px', borderRadius: '10px',
-        border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(255, 255, 255, 0.05)',
-        color: 'inherit', outline: 'none', marginBottom: '15px'
-    },
+    glassInput: { width: '100%', padding: '12px 15px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.1)', background: 'rgba(255, 255, 255, 0.05)', color: 'inherit', outline: 'none', marginBottom: '15px' },
     labelGroup: { display: 'flex', alignItems: 'center', gap: '15px' },
     label: { fontSize: '14px', opacity: 0.8 },
-    uploadBox: {
-        padding: '30px', border: '2px dashed rgba(99, 102, 241, 0.3)', borderRadius: '15px',
-        textAlign: 'center', background: 'rgba(99, 102, 241, 0.05)', marginBottom: '30px'
-    },
+    uploadBox: { padding: '30px', border: '2px dashed rgba(99, 102, 241, 0.3)', borderRadius: '15px', textAlign: 'center', background: 'rgba(99, 102, 241, 0.05)', marginBottom: '30px' },
     uploadIcon: { fontSize: '30px', marginBottom: '10px' },
     fileInput: { cursor: 'pointer', fontSize: '14px' },
     fileName: { marginTop: '10px', fontSize: '12px', color: '#10b981', fontWeight: 'bold' },
-    submitBtn: (loading) => ({
-        width: '100%', padding: '16px', borderRadius: '12px', border: 'none',
-        backgroundColor: loading ? '#64748b' : '#6366f1', color: 'white',
-        fontWeight: 'bold', fontSize: '16px', cursor: loading ? 'not-allowed' : 'pointer',
-        boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.3)', transition: '0.3s'
-    }),
-    alertCard: {
-        maxWidth: '500px', margin: '100px auto', textAlign: 'center', padding: '40px',
-        background: 'rgba(239, 68, 68, 0.05)', borderRadius: '24px', border: '1px solid rgba(239, 68, 68, 0.1)'
-    },
-    iconCircle: (color) => ({
-        width: '60px', height: '60px', borderRadius: '50%', backgroundColor: `${color}20`,
-        color: color, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '30px', margin: '0 auto 20px auto'
-    }),
-    secondaryBtn: {
-        marginTop: '20px', padding: '12px 25px', backgroundColor: 'transparent',
-        border: '1px solid #6366f1', color: '#6366f1', borderRadius: '10px',
-        fontWeight: 'bold', cursor: 'pointer'
-    },
+    submitBtn: (loading) => ({ width: '100%', padding: '16px', borderRadius: '12px', border: 'none', backgroundColor: loading ? '#64748b' : '#6366f1', color: 'white', fontWeight: 'bold', fontSize: '16px', cursor: loading ? 'not-allowed' : 'pointer', boxShadow: '0 10px 15px -3px rgba(99, 102, 241, 0.3)', transition: '0.3s' }),
+    alertCard: { maxWidth: '500px', margin: '100px auto', textAlign: 'center', padding: '40px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: '24px', border: '1px solid rgba(239, 68, 68, 0.1)' },
+    iconCircle: (color) => ({ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: `${color}20`, color: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', margin: '0 auto 20px auto' }),
+    secondaryBtn: { marginTop: '20px', padding: '12px 25px', backgroundColor: 'transparent', border: '1px solid #6366f1', color: '#6366f1', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer' },
     loadingText: { textAlign: 'center', padding: '100px', fontWeight: 'bold' }
 };
 

@@ -28,8 +28,10 @@ const Login = () => {
 
             if (rawRole === 'CANDIDAT') {
                 navigate('/espace-candidat');
-            } else if (rawRole === 'ADMIN' || rawRole === 'ADMINISTRATEUR' || rawRole === 'AGENTRH') {
+            } else if (rawRole === 'DG') {
                 navigate('/dashboard');
+            } else if (rawRole === 'ADMIN') {
+                navigate('/manage-offres');
             }
         } catch (err) {
             setError("Email ou mot de passe incorrect.");

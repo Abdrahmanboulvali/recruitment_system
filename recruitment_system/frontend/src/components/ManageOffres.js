@@ -4,6 +4,9 @@ import axios from 'axios';
 const ManageOffres = () => {
     const [offres, setOffres] = useState([]);
     const [showForm, setShowForm] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentId, setCurrentId] = useState(null);
+
     const [newOffre, setNewOffre] = useState({
         titre: '',
         description: '',
@@ -27,16 +30,47 @@ const ManageOffres = () => {
         }
     };
 
-    const handleCreate = async (e) => {
+    // دالة لفتح النموذج في وضع التعديل
+    const handleEditClick = (offre) => {
+        setNewOffre({
+            titre: offre.titre,
+            description: offre.description,
+            experience_min: offre.experience_min,
+            competences_requises: offre.competences_requises || ''
+        });
+        setCurrentId(offre.id);
+        setIsEditing(true);
+        setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('http://127.0.0.1:8000/api/offres/', newOffre, config);
-            setNewOffre({ titre: '', description: '', experience_min: 0, competences_requises: '' });
-            setShowForm(false);
+            const dataToSend = {
+                ...newOffre,
+                experience_min: parseInt(newOffre.experience_min) || 0
+            };
+
+            if (isEditing) {
+                await axios.put(`http://127.0.0.1:8000/api/offres/${currentId}/`, dataToSend, config);
+            } else {
+                await axios.post('http://127.0.0.1:8000/api/offres/', dataToSend, config);
+            }
+
+            resetForm();
             fetchOffres();
         } catch (err) {
-            alert("Erreur lors de l'ajout");
+            const errorMsg = err.response?.data ? JSON.stringify(err.response.data) : "Erreur lors de l'opération";
+            alert(errorMsg);
         }
+    };
+
+    const resetForm = () => {
+        setNewOffre({ titre: '', description: '', experience_min: 0, competences_requises: '' });
+        setShowForm(false);
+        setIsEditing(false);
+        setCurrentId(null);
     };
 
     const handleDelete = async (id) => {
@@ -55,60 +89,65 @@ const ManageOffres = () => {
             <div style={styles.topBar}>
                 <div style={styles.titleSection}>
                     <h2 style={styles.mainTitle}>Gestion des Offres</h2>
-                    <p style={styles.subTitle}>Publiez et gérez les opportunités d'emploi disponibles</p>
+                    <p style={styles.subTitle}>Contrôlez et mettez à jour vos publications</p>
                 </div>
                 <button
-                    onClick={() => setShowForm(!showForm)}
+                    onClick={() => isEditing ? resetForm() : setShowForm(!showForm)}
                     style={styles.toggleBtn(showForm)}
                 >
-                    {showForm ? "✕ Fermer" : "+ Nouvelle Offre"}
+                    {showForm ? "✕ Annuler" : "+ Nouvelle Offre"}
                 </button>
             </div>
 
             {showForm && (
                 <div style={styles.glassForm}>
                     <h3 style={styles.formTitle}>
-                        <span>📌</span> Détails de la nouvelle offre
+                        <span>{isEditing ? "📝 Modifier l'offre" : "📌 Nouvelle offre"}</span>
                     </h3>
-                    <form onSubmit={handleCreate}>
+                    <form onSubmit={handleSubmit}>
                         <div style={styles.inputGrid}>
                             <div style={styles.fieldContainer}>
                                 <label style={styles.label}>💼 Titre du poste</label>
                                 <input
                                     style={styles.glassInput}
-                                    placeholder="Ex: Développeur Fullstack Python"
                                     required
                                     value={newOffre.titre}
                                     onChange={e => setNewOffre({...newOffre, titre: e.target.value})}
                                 />
                             </div>
-
                             <div style={{...styles.fieldContainer, flex: '0 1 200px'}}>
-                                <label style={styles.label}>⏳ Expérience min (ans)</label>
+                                <label style={styles.label}>⏳ Expérience min</label>
                                 <input
                                     type="number"
-                                    min="0"
                                     style={styles.glassInput}
-                                    placeholder="0"
-                                    required
                                     value={newOffre.experience_min}
                                     onChange={e => setNewOffre({...newOffre, experience_min: e.target.value})}
                                 />
                             </div>
                         </div>
 
-                        <div style={{...styles.fieldContainer, marginTop: '25px'}}>
-                            <label style={styles.label}>📝 Description du poste</label>
+                        <div style={{marginTop: '20px'}}>
+                            <label style={styles.label}>🛠️ Compétences (séparées par des virgules)</label>
+                            <input
+                                style={styles.glassInput}
+                                value={newOffre.competences_requises}
+                                onChange={e => setNewOffre({...newOffre, competences_requises: e.target.value})}
+                            />
+                        </div>
+
+                        <div style={{marginTop: '20px'}}>
+                            <label style={styles.label}>📝 Description complète</label>
                             <textarea
                                 style={styles.glassTextarea}
-                                placeholder="Décrivez les missions..."
                                 required
                                 value={newOffre.description}
                                 onChange={e => setNewOffre({...newOffre, description: e.target.value})}
                             />
                         </div>
 
-                        <button type="submit" style={styles.submitBtn}>🚀 Publier l'offre</button>
+                        <button type="submit" style={styles.submitBtn}>
+                            {isEditing ? "💾 Enregistrer les modifications" : "🚀 Publier l'offre"}
+                        </button>
                     </form>
                 </div>
             )}
@@ -117,31 +156,39 @@ const ManageOffres = () => {
                 <table style={styles.table}>
                     <thead>
                         <tr style={styles.headerRow}>
-                            <th style={styles.th}>Poste</th>
+                            <th style={styles.th}>Détails du Poste</th>
+                            <th style={styles.th}>Compétences</th>
                             <th style={styles.th}>Expérience</th>
                             <th style={{...styles.th, textAlign: 'center'}}>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {offres.length > 0 ? offres.map(o => (
+                        {offres.map(o => (
                             <tr key={o.id} style={styles.tr}>
-                                <td style={{...styles.td, fontWeight: '600'}}>{o.titre}</td>
                                 <td style={styles.td}>
-                                    <span style={styles.expBadge}>{o.experience_min} ans min</span>
+                                    <div style={{fontWeight: '700', color: '#fff'}}>{o.titre}</div>
+                                    <div style={{fontSize: '12px', opacity: 0.6, marginTop: '4px'}}>
+                                        {o.description.substring(0, 50)}...
+                                    </div>
+                                </td>
+                                <td style={styles.td}>
+                                    <div style={styles.skillsContainer}>
+                                        {o.competences_requises?.split(',').map((s, i) => (
+                                            <span key={i} style={styles.skillTag}>{s.trim()}</span>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td style={styles.td}>
+                                    <span style={styles.expBadge}>{o.experience_min} ans</span>
                                 </td>
                                 <td style={{...styles.td, textAlign: 'center'}}>
-                                    <button onClick={() => handleDelete(o.id)} style={styles.deleteBtn}>
-                                        🗑️ Supprimer
-                                    </button>
+                                    <div style={styles.actionGroup}>
+                                        <button onClick={() => handleEditClick(o)} style={styles.editBtn}>✏️</button>
+                                        <button onClick={() => handleDelete(o.id)} style={styles.deleteBtn}>🗑️</button>
+                                    </div>
                                 </td>
                             </tr>
-                        )) : (
-                            <tr>
-                                <td colSpan="3" style={{...styles.td, textAlign: 'center', opacity: 0.5}}>
-                                    Aucune offre disponible.
-                                </td>
-                            </tr>
-                        )}
+                        ))}
                     </tbody>
                 </table>
             </div>
@@ -149,73 +196,33 @@ const ManageOffres = () => {
     );
 };
 
-// التنسيقات المحدثة لتدعم الوضعين (Light & Dark) تلقائياً
 const styles = {
-    pageWrapper: {
-        padding: '40px 20px',
-        maxWidth: '1100px',
-        margin: '0 auto',
-        minHeight: '100vh',
-        color: 'inherit' // سيأخذ اللون من الـ Body (أسود في النهار وأبيض في الليل)
-    },
+    // ... التنسيقات السابقة مع الإضافات الجديدة ...
+    pageWrapper: { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', color: '#e2e8f0' },
     topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' },
-    mainTitle: { fontSize: '32px', fontWeight: '800', margin: 0, color: 'inherit' },
-    subTitle: { opacity: 0.7, margin: 0, color: 'inherit' },
-    toggleBtn: (isOpen) => ({
-        padding: '12px 25px',
-        backgroundColor: isOpen ? 'rgba(239, 68, 68, 0.1)' : '#6366f1',
-        color: isOpen ? '#ef4444' : 'white',
-        border: isOpen ? '1px solid #ef4444' : 'none',
-        borderRadius: '12px',
-        fontWeight: 'bold',
-        cursor: 'pointer'
-    }),
-    glassForm: {
-        background: 'rgba(120, 120, 120, 0.05)', // خلفية شفافة رمادية تعمل في الوضعين
-        backdropFilter: 'blur(20px)',
-        padding: '40px',
-        borderRadius: '24px',
-        border: '1px solid rgba(150, 150, 150, 0.2)',
-        marginBottom: '40px'
-    },
-    formTitle: { marginBottom: '30px', color: '#6366f1', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px' },
-    inputGrid: { display: 'flex', gap: '25px', flexWrap: 'wrap' },
-    fieldContainer: { display: 'flex', flexDirection: 'column', flex: 1, gap: '12px' },
-    label: { fontSize: '14px', fontWeight: '600', color: 'inherit', opacity: 0.8 },
-    glassInput: {
-        padding: '16px',
-        borderRadius: '14px',
-        border: '1px solid rgba(150, 150, 150, 0.3)',
-        background: 'rgba(150, 150, 150, 0.05)',
-        color: 'inherit', // يضمن ظهور النص المكتوب بوضوح
-        fontSize: '15px',
-        outline: 'none'
-    },
-    glassTextarea: {
-        padding: '16px',
-        borderRadius: '14px',
-        border: '1px solid rgba(150, 150, 150, 0.3)',
-        background: 'rgba(150, 150, 150, 0.05)',
-        color: 'inherit',
-        fontSize: '15px',
-        height: '150px',
-        resize: 'none',
-        outline: 'none'
-    },
-    submitBtn: { width: '100%', marginTop: '30px', padding: '16px', backgroundColor: '#6366f1', color: 'white', borderRadius: '14px', fontWeight: '800', border: 'none', cursor: 'pointer' },
-    tableCard: {
-        background: 'rgba(150, 150, 150, 0.05)',
-        borderRadius: '24px',
-        border: '1px solid rgba(150, 150, 150, 0.2)',
-        overflow: 'hidden'
-    },
+    mainTitle: { fontSize: '28px', fontWeight: 'bold' },
+    subTitle: { color: '#94a3b8', fontSize: '14px' },
+    toggleBtn: (isOpen) => ({ padding: '10px 20px', backgroundColor: isOpen ? '#ef4444' : '#6366f1', color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600' }),
+    glassForm: { background: 'rgba(30, 41, 59, 0.7)', padding: '30px', borderRadius: '20px', border: '1px solid #334155', marginBottom: '30px' },
+    formTitle: { marginBottom: '20px', fontSize: '18px' },
+    inputGrid: { display: 'flex', gap: '20px' },
+    fieldContainer: { display: 'flex', flexDirection: 'column', flex: 1 },
+    label: { marginBottom: '8px', fontSize: '13px', color: '#94a3b8' },
+    glassInput: { padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', width: '100%', outline: 'none' },
+    glassTextarea: { padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', width: '100%', height: '100px', outline: 'none' },
+    submitBtn: { width: '100%', marginTop: '20px', padding: '14px', backgroundColor: '#6366f1', color: 'white', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
+    tableCard: { background: 'rgba(30, 41, 59, 0.4)', borderRadius: '20px', border: '1px solid #334155', overflow: 'hidden' },
     table: { width: '100%', borderCollapse: 'collapse' },
-    headerRow: { background: 'rgba(99, 102, 241, 0.1)' },
-    th: { padding: '20px', textAlign: 'left', color: 'inherit', fontSize: '13px', textTransform: 'uppercase' },
-    tr: { borderBottom: '1px solid rgba(150, 150, 150, 0.1)', color: 'inherit' },
-    td: { padding: '20px', color: 'inherit' },
-    expBadge: { padding: '5px 12px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold' },
-    deleteBtn: { padding: '8px 15px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' }
+    headerRow: { background: '#1e293b' },
+    th: { padding: '15px', textAlign: 'left', fontSize: '12px', color: '#94a3b8' },
+    tr: { borderBottom: '1px solid #334155' },
+    td: { padding: '15px' },
+    skillsContainer: { display: 'flex', gap: '5px', flexWrap: 'wrap' },
+    skillTag: { padding: '2px 8px', background: '#334155', borderRadius: '5px', fontSize: '11px' },
+    expBadge: { padding: '4px 10px', background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' },
+    actionGroup: { display: 'flex', gap: '10px', justifyContent: 'center' },
+    editBtn: { background: 'none', border: '1px solid #334155', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer' },
+    deleteBtn: { background: 'none', border: '1px solid #ef444455', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer' }
 };
 
 export default ManageOffres;

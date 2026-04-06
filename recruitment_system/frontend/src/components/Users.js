@@ -14,7 +14,7 @@ const Users = () => {
                 });
                 setUsers(response.data);
             } catch (err) {
-                console.error("Erreur lors جلب المستخدمين", err);
+                console.error("Erreur lors d'amener les utilisateurs", err);
             } finally {
                 setLoading(false);
             }

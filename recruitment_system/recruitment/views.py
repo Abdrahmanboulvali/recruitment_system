@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from django.db.models import Count, Avg
 from .models import Offre, Candidat, Candidature, User
 from .serializers import OffreSerializer, CandidatSerializer, CandidatureSerializer
+import pdfplumber
+import google.generativeai as genai  # pip install google-generativeai
 
 # --- كود التفعيل الجديد (OTP Verification) ---
 class VerifyOTPView(APIView):
@@ -85,14 +87,140 @@ def patch(self, request, pk):
     return Response(serializer.errors, status=400)
 
 # --- ViewSets لإدارة البيانات عبر API ---
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
+# أو
+from rest_framework.permissions import AllowAny
+
+
 class OffreViewSet(viewsets.ModelViewSet):
     queryset = Offre.objects.all()
     serializer_class = OffreSerializer
+
+    # هذا السطر يسمح للجميع بالـ GET (القراءة)
+    # ويحصر الـ POST/DELETE (الكتابة) للمسجلين فقط
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
 class CandidatViewSet(viewsets.ModelViewSet):
     queryset = Candidat.objects.all()
     serializer_class = CandidatSerializer
 
+
+# recruitment/views.py
+import pdfplumber
+import google.generativeai as genai
+from rest_framework import viewsets, generics
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import User, Offre, Candidat, Candidature
+from .serializers import OffreSerializer, CandidatureSerializer, UserSerializer
+from django.db.models import Avg, Count
+from recruitment.permissions import IsResponsableRH
+
+# إعداد Gemini
+genai.configure(api_key="AIzaSyBznYS6ltLzOaNnElF3fw16ZmzroH-24JE")
+
+
 class CandidatureViewSet(viewsets.ModelViewSet):
     queryset = Candidature.objects.all()
     serializer_class = CandidatureSerializer
+
+    def perform_create(self, serializer):
+        # 1. حفظ الطلب أولاً
+        candidature = serializer.save()
+
+        try:
+            # 2. استخراج النص (استخدمنا cv_file كما في الموديل الجديد)
+            cv_text = ""
+            with pdfplumber.open(candidature.cv_file.path) as pdf:
+                for page in pdf.pages:
+                    cv_text += page.extract_text() or ""
+
+            # 3. صياغة الـ Prompt للحصول على النتيجة والتعليق
+            model = genai.GenerativeModel('gemini-pro')
+            prompt = f"""
+            Analyze this CV for the position: {candidature.offre.titre}
+            Description: {candidature.offre.description}
+            CV Content: {cv_text[:3000]}
+
+            Return the result in this exact format:
+            Score: [number 0-100]
+            Comment: [short summary of why]
+            """
+
+            response = model.generate_content(prompt)
+            res_text = response.text
+
+            # 4. استخراج البيانات وحفظها
+            import re
+            score_match = re.search(r'Score:\s*(\d+)', res_text)
+            comment_match = re.search(r'Comment:\s*(.*)', res_text, re.DOTALL)
+
+            if score_match:
+                candidature.score = int(score_match.group(1))
+            if comment_match:
+                candidature.commentaire_ia = comment_match.group(1).strip()
+
+            candidature.save()
+
+        except Exception as e:
+            print(f"AI Error: {e}")
+
+
+# --- API للمدير العام (DG) ---
+class DGAdminListView(generics.ListCreateAPIView):
+    """عرض وإضافة المسؤولين (Admins) - للمدير العام فقط"""
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        return User.objects.filter(role='ADMIN')
+
+
+class FullDashboardStatsAPI(APIView):
+    """إحصائيات شاملة للمدير العام"""
+    permission_classes = [IsAuthenticated, IsResponsableRH]
+
+    def get(self, request):
+        # التأكد أن الطلب من DG أو ADMIN
+        if request.user.role not in ['DG', 'ADMIN']:
+            return Response({"error": "Unauthorized"}, status=403)
+
+        stats = {
+            "total_users": User.objects.count(),
+            "total_offres": Offre.objects.count(),
+            "total_candidatures": Candidature.objects.count(),
+            "global_avg_score": Candidature.objects.aggregate(Avg('score'))['score__avg'],
+            "by_status": Candidature.objects.values('statut').annotate(count=Count('id'))
+        }
+        return Response(stats)
+
+
+from rest_framework import status, permissions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .serializers import AgentCreateSerializer
+
+
+class CreateAgentView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        # التعديل هنا: السماح للمدير العام (DG) والمسؤول (ADMIN)
+        # استخدمنا list للتحقق من وجود الدور داخلها
+        allowed_roles = ['ADMIN', 'DG', 'ADMINISTRATEUR']
+
+        if request.user.role.upper() not in allowed_roles:
+            return Response(
+                {"error": "Vous n'êtes pas autorisé à effectuer cette action."},
+                status=status.HTTP_403_FOR_REQUESTED_ACTION
+            )
+
+        serializer = AgentCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Le compte agent a été créé avec succès!"},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+

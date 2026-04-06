@@ -14,21 +14,29 @@ const ManageCandidatures = () => {
             try {
                 const token = localStorage.getItem('access');
                 const config = { headers: { Authorization: `Bearer ${token}` } };
+
+                // جلب البيانات
                 const [offresRes, candidatsRes, candidaturesRes] = await Promise.all([
                     axios.get('http://127.0.0.1:8000/api/offres/', config),
                     axios.get('http://127.0.0.1:8000/api/candidats/', config),
                     axios.get('http://127.0.0.1:8000/api/candidatures/', config)
                 ]);
 
+                // تحويل العروض والترشيحات لخرائط (Maps) لسهولة الوصول
                 const offresMap = {};
                 offresRes.data.forEach(o => offresMap[o.id] = o.titre);
                 setOffres(offresMap);
 
                 const candidatsMap = {};
-                candidatsRes.data.forEach(c => candidatsMap[c.id] = `${c.nom} ${c.prenom}`);
+                candidatsRes.data.forEach(c => {
+                    candidatsMap[c.id] = `${c.nom} ${c.prenom}`;
+                });
                 setCandidats(candidatsMap);
 
+                // تخزين الترشيحات مع التأكد من وجود البيانات
+                console.log("Candidatures من السيرفر:", candidaturesRes.data);
                 setCandidatures(candidaturesRes.data);
+
             } catch (err) {
                 console.error("Erreur lors du chargement", err);
             } finally {
@@ -37,6 +45,17 @@ const ManageCandidatures = () => {
         };
         fetchData();
     }, []);
+
+    // دالة مساعدة لجلب الاسم سواء كان القادم ID أو Object
+    const getCandidatName = (can) => {
+        const id = typeof can.candidat === 'object' ? can.candidat.id : can.candidat;
+        return candidats[id] || `Candidat #${id}`;
+    };
+
+    const getOffreTitle = (can) => {
+        const id = typeof can.offre === 'object' ? can.offre.id : can.offre;
+        return offres[id] || `Offre #${id}`;
+    };
 
     const handleAccept = async (id) => {
         if (window.confirm("Voulez-vous vraiment accepter cette candidature ?")) {
@@ -47,38 +66,42 @@ const ManageCandidatures = () => {
                     { statut: 'Accepté' },
                     config
                 );
-                alert("Candidature acceptée !");
 
-                // تحديث الحالة محلياً لنقل الطلب فوراً إلى جدول المقبولين
+                // تحديث الحالة محلياً فوراً
                 setCandidatures(prev => prev.map(can =>
                     can.id === id ? { ...can, statut: 'Accepté' } : can
                 ));
+                alert("Candidature acceptée !");
             } catch (err) {
-                console.error("Erreur lors de l'acceptation", err);
+                console.error(err);
                 alert("Erreur lors de l'opération");
             }
         }
     };
 
     const handleOpenModal = (cvPath) => {
+        if(!cvPath) return alert("Aucun fichier CV trouvé");
         const baseUrl = "http://127.0.0.1:8000";
         let fullUrl = cvPath.startsWith('http') ? cvPath : `${baseUrl}${cvPath}`;
         setSelectedCv(fullUrl);
         setShowModal(true);
     };
 
-    if (loading) return <div style={{textAlign:'center', padding:'100px', fontWeight:'bold'}}>Chargement des dossiers...</div>;
+    if (loading) return <div style={styles.loader}>Chargement des dossiers...</div>;
 
-    // فلترة الطلبات برمجياً
-    const pendingCandidatures = candidatures.filter(can => can.statut === 'En attente');
-    const acceptedCandidatures = candidatures.filter(can => can.statut === 'Accepté');
+    // فلترة مع مراعاة حالة الأحرف (Case Insensitive)
+    const pendingCandidatures = candidatures.filter(can =>
+        can.statut?.toLowerCase() === 'en attente' || can.statut?.toLowerCase() === 'en_attente'
+    );
+    const acceptedCandidatures = candidatures.filter(can =>
+        can.statut?.toLowerCase() === 'accepté' || can.statut?.toLowerCase() === 'accepte'
+    );
 
     return (
         <div style={styles.pageWrapper}>
-            {/* القسم الأول: طلبات قيد الانتظار */}
             <header style={styles.header}>
-                <h2 style={styles.title}>Candidatures En Attente</h2>
-                <p style={{ opacity: 0.7 }}>Dossiers à évaluer et valider</p>
+                <h2 style={styles.title}>Candidatures En Attente ({pendingCandidatures.length})</h2>
+                <p style={{ opacity: 0.7 }}>Dossiers à évaluer par l'IA et valider</p>
             </header>
 
             <div style={styles.tableContainer}>
@@ -92,29 +115,27 @@ const ManageCandidatures = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {pendingCandidatures.map(can => (
+                        {pendingCandidatures.length > 0 ? pendingCandidatures.map(can => (
                             <tr key={can.id} style={styles.tr}>
-                                <td style={styles.td}>{candidats[can.candidat] || `ID: ${can.candidat}`}</td>
-                                <td style={styles.td}>{offres[can.offre] || `Offre #${can.offre}`}</td>
+                                <td style={styles.td}>{getCandidatName(can)}</td>
+                                <td style={styles.td}>{getOffreTitle(can)}</td>
                                 <td style={styles.td}>
                                     <span style={styles.scoreBadge(can.score)}>{can.score}%</span>
                                 </td>
                                 <td style={styles.td}>
-                                    <button onClick={() => handleOpenModal(can.cv_file)} style={styles.btnAction('#6366f1')}>
-                                        Visualiser
-                                    </button>
+                                    <button onClick={() => handleOpenModal(can.cv_file)} style={styles.btnAction('#6366f1')}>Visualiser</button>
                                     <button onClick={() => handleAccept(can.id)} style={styles.btnAction('#10b981')}>Accepter</button>
                                 </td>
                             </tr>
-                        ))}
+                        )) : (
+                            <tr><td colSpan="4" style={{textAlign: 'center', padding: '20px', opacity: 0.5}}>Aucune candidature en attente</td></tr>
+                        )}
                     </tbody>
                 </table>
             </div>
 
-            {/* القسم الثاني: الطلبات المقبولة */}
             <header style={{...styles.header, marginTop: '60px', borderLeftColor: '#10b981'}}>
-                <h2 style={styles.title}>Candidatures Acceptées</h2>
-                <p style={{ opacity: 0.7 }}>Historique des candidats retenus</p>
+                <h2 style={styles.title}>Candidatures Acceptées ({acceptedCandidatures.length})</h2>
             </header>
 
             <div style={styles.tableContainer}>
@@ -130,12 +151,10 @@ const ManageCandidatures = () => {
                     <tbody>
                         {acceptedCandidatures.map(can => (
                             <tr key={can.id} style={styles.tr}>
-                                <td style={styles.td}>{candidats[can.candidat] || `ID: ${can.candidat}`}</td>
-                                <td style={styles.td}>{offres[can.offre] || `Offre #${can.offre}`}</td>
+                                <td style={styles.td}>{getCandidatName(can)}</td>
+                                <td style={styles.td}>{getOffreTitle(can)}</td>
                                 <td style={styles.td}>{can.score}%</td>
-                                <td style={styles.td}>
-                                    <span style={{color: '#10b981', fontWeight: 'bold'}}>✅ Accepté</span>
-                                </td>
+                                <td style={styles.td}><span style={{color: '#10b981', fontWeight: 'bold'}}>✅ Accepté</span></td>
                             </tr>
                         ))}
                     </tbody>
@@ -146,10 +165,15 @@ const ManageCandidatures = () => {
                 <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
                     <div style={styles.modalContent} onClick={e => e.stopPropagation()}>
                         <div style={styles.modalHeader}>
-                            <h3 style={{ margin: 0 }}>Visualisation du CV</h3>
+                            <h3>Analyse du CV</h3>
                             <button onClick={() => setShowModal(false)} style={styles.closeBtn}>&times;</button>
                         </div>
-                        <iframe src={selectedCv} title="CV Viewer" style={styles.iframe}></iframe>
+                        <object data={selectedCv} type="application/pdf" style={styles.iframe}>
+                            <div style={{color: 'white', textAlign: 'center'}}>
+                                <p>Le navigateur لا يدعم عرض الملف مباشرة.</p>
+                                <a href={selectedCv} target="_blank" rel="noreferrer" style={{color: '#6366f1'}}>Ouvrir le PDF</a>
+                            </div>
+                        </object>
                     </div>
                 </div>
             )}
@@ -157,23 +181,25 @@ const ManageCandidatures = () => {
     );
 };
 
+// ... التنسيقات (نفس التي لديك مع تحسينات طفيفة)
 const styles = {
-    pageWrapper: { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', minHeight: '100vh' },
+    pageWrapper: { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', color: 'white' },
     header: { marginBottom: '30px', borderLeft: '5px solid #6366f1', paddingLeft: '20px' },
-    title: { fontSize: '28px', fontWeight: '800', margin: '0 0 5px 0' },
-    tableContainer: { background: 'rgba(255, 255, 255, 0.05)', backdropFilter: 'blur(10px)', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.1)', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' },
-    table: { width: '100%', borderCollapse: 'collapse', color: 'inherit' },
-    headerRow: { background: 'rgba(99, 102, 241, 0.1)' },
-    th: { padding: '18px', textAlign: 'left', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.8 },
-    tr: { borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: '0.3s' },
-    td: { padding: '18px', fontSize: '15px' },
-    scoreBadge: (score) => ({ backgroundColor: score > 70 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: score > 70 ? '#10b981' : '#f59e0b', padding: '5px 12px', borderRadius: '8px', fontWeight: 'bold', fontSize: '14px' }),
-    btnAction: (color) => ({ marginRight: '10px', padding: '8px 16px', border: `1px solid ${color}`, background: 'transparent', color: color, borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', transition: '0.3s' }),
-    modalOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-    modalContent: { background: 'rgba(30, 41, 59, 0.95)', color: 'white', padding: '25px', borderRadius: '24px', width: '90%', maxWidth: '1000px', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' },
-    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-    closeBtn: { fontSize: '30px', border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444' },
-    iframe: { width: '100%', height: '70vh', border: 'none', borderRadius: '15px', background: 'white' }
+    title: { fontSize: '26px', fontWeight: 'bold', margin: 0 },
+    loader: { textAlign: 'center', padding: '100px', fontSize: '20px', color: 'gray' },
+    tableContainer: { background: 'rgba(255, 255, 255, 0.03)', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.1)', overflow: 'hidden' },
+    table: { width: '100%', borderCollapse: 'collapse' },
+    headerRow: { background: 'rgba(255, 255, 255, 0.05)' },
+    th: { padding: '15px', textAlign: 'left', opacity: 0.6, fontSize: '13px' },
+    tr: { borderBottom: '1px solid rgba(255, 255, 255, 0.05)' },
+    td: { padding: '15px' },
+    scoreBadge: (score) => ({ background: score > 60 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: score > 60 ? '#10b981' : '#f59e0b', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }),
+    btnAction: (color) => ({ marginRight: '10px', padding: '6px 12px', border: `1px solid ${color}`, background: 'transparent', color: color, borderRadius: '6px', cursor: 'pointer' }),
+    modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+    modalContent: { background: '#1e293b', padding: '20px', borderRadius: '15px', width: '80%', height: '80%' },
+    modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
+    closeBtn: { background: 'none', border: 'none', color: 'red', fontSize: '24px', cursor: 'pointer' },
+    iframe: { width: '100%', height: '90%', borderRadius: '10px' }
 };
 
 export default ManageCandidatures;

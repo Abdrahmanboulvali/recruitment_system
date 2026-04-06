@@ -7,14 +7,11 @@ const Navbar = () => {
   const token = localStorage.getItem('access');
   const role = localStorage.getItem('role');
 
-  // إضافة حالة للوضع المظلم داخل النافبار
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  // تأثير لتغيير خلفية الصفحة بالكامل عند تبديل الوضع
   useEffect(() => {
     document.body.style.backgroundColor = isDarkMode ? '#0f172a' : '#f8fafc';
     document.body.style.color = isDarkMode ? '#f8fafc' : '#1e293b';
-    document.body.style.transition = 'all 0.4s ease';
   }, [isDarkMode]);
 
   if (location.pathname === '/login' || location.pathname === '/register' || !token) {
@@ -26,39 +23,58 @@ const Navbar = () => {
     navigate('/login');
   };
 
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+  // التحقق من الدور لتعيين الصلاحيات
+  const isDG = role === 'Directeur Général' || role === 'DG';
+  const isAgent = role === 'Responsable RH' || role === 'ADMIN';
 
-  // ألوان ديناميكية بناءً على الوضع
-  const navBg = isDarkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)';
   const textColor = isDarkMode ? '#f8fafc' : '#1e293b';
 
   return (
     <nav style={{
       ...styles.nav,
-      backgroundColor: navBg,
+      backgroundColor: isDarkMode ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.8)',
       color: textColor,
       borderBottom: `1px solid ${isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
     }}>
       <div style={styles.brand}>
         <div style={styles.logoBadge}>RH</div>
-        <span style={{ fontWeight: '800', fontSize: '18px', letterSpacing: '-0.5px' }}>Recrutement</span>
+        <span style={{ fontWeight: '800', fontSize: '18px' }}>Recrutement</span>
       </div>
 
       <div style={styles.linksContainer}>
-        {role === 'CANDIDAT' && (
-          <Link to="/espace-candidat" style={styles.link(location.pathname === '/espace-candidat', textColor)}>Offres</Link>
+        {(isDG ) && (
+          <Link to="/dashboard" style={styles.link(location.pathname === '/dashboard', textColor)}>
+            Dashboard
+          </Link>
         )}
 
-        {(role === 'ADMIN' || role === 'ADMINISTRATEUR') && (
+        {(isDG || isAgent) && (
           <>
-            <Link to="/dashboard" style={styles.link(location.pathname === '/dashboard', textColor)}>Dashboard</Link>
-            <Link to="/users" style={styles.link(location.pathname === '/users', textColor)}>Utilisateurs</Link>
+            <Link to="/manage-offres" style={styles.link(location.pathname === '/manage-offres', textColor)}>
+              Offres
+            </Link>
+            <Link to="/manage-candidatures" style={styles.link(location.pathname === '/manage-candidatures', textColor)}>
+              Candidatures
+            </Link>
           </>
+        )}
+
+        {isDG && (
+          <Link to="/users" style={styles.link(location.pathname === '/users', textColor)}>
+            Utilisateurs
+          </Link>
         )}
       </div>
 
       <div style={styles.actions}>
-        <button onClick={toggleTheme} style={styles.themeBtn(isDarkMode)}>
+        {/* حماية زر إضافة وكيل ليكون للمدير فقط */}
+        {isDG && (
+          <Link to="/add-agent" style={styles.addAgentBtn}>
+            + Ajouter Agent
+          </Link>
+        )}
+
+        <button onClick={() => setIsDarkMode(!isDarkMode)} style={styles.themeBtn(isDarkMode)}>
           {isDarkMode ? '☀️' : '🌙'}
         </button>
         <button onClick={handleLogout} style={styles.logoutBtn}>
@@ -69,6 +85,7 @@ const Navbar = () => {
   );
 };
 
+// كائن التنسيقات الذي كان ناقصاً ويسبب الخطأ
 const styles = {
   nav: {
     display: 'flex',
@@ -109,6 +126,17 @@ const styles = {
     color: isActive ? '#6366f1' : color,
     transition: 'all 0.3s ease'
   }),
+  addAgentBtn: {
+    backgroundColor: '#6366f1',
+    color: 'white',
+    padding: '8px 15px',
+    borderRadius: '10px',
+    textDecoration: 'none',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    transition: '0.3s',
+    marginRight: '10px'
+  },
   actions: {
     display: 'flex',
     alignItems: 'center',

@@ -4,6 +4,7 @@ from .views import OffreViewSet, CandidatViewSet, CandidatureViewSet, DashboardD
 from .views import VerifyOTPView
 from . import views
 from .views import UserListView
+from .views import CreateAgentView
 
 router = DefaultRouter()
 router.register(r'offres', OffreViewSet)
@@ -16,6 +17,7 @@ urlpatterns = [
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
     path('stats/', DashboardDataAPI.as_view(), name='api-stats'),
     path('user-info/', views.get_user_info, name='user_info'),
+    path('manage-agents/create/', CreateAgentView.as_view(), name='create-agent'),
     path('', include(router.urls)),
 
 
