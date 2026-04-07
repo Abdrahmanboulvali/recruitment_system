@@ -40,13 +40,13 @@ const EspaceCandidat = () => {
           onClick={() => setActiveTab('ENTREPRISES')}
           style={activeTab === 'ENTREPRISES' ? styles.activeTab : styles.inactiveTab}
         >
-          🏢 LES ENTREPRISES
+          🏢 ...
         </button>
         <button
           onClick={() => setActiveTab('AVIS')}
           style={activeTab === 'AVIS' ? styles.activeTab : styles.inactiveTab}
         >
-          📢 AVIS ET PUBLICATIONS
+          📢 ...
         </button>
       </div>
 
@@ -73,7 +73,7 @@ const EspaceCandidat = () => {
 
         {activeTab === 'ENTREPRISES' && (
           <div style={styles.companiesGrid}>
-            {['Alcom', 'SNDE', 'Mauritel', 'Chinguittel', 'Attijari Bank', 'Star Oil'].map((company, index) => (
+            {[].map((company, index) => (
               <div key={index} style={styles.companyCard}>
                 <div style={styles.companyIcon}>{company[0]}</div>
                 <h4 style={styles.companyName}>{company}</h4>
@@ -86,7 +86,7 @@ const EspaceCandidat = () => {
 
         {activeTab === 'AVIS' && (
           <div style={styles.emptyState}>
-            <p>📢 Aucune nouvelle publication pour le moment.</p>
+            <p></p>
           </div>
         )}
       </main>
