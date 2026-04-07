@@ -15,7 +15,6 @@ const ManageOffres = () => {
     });
 
     const token = localStorage.getItem('access');
-    const config = { headers: { Authorization: `Bearer ${token}` } };
 
     useEffect(() => {
         fetchOffres();
@@ -23,14 +22,15 @@ const ManageOffres = () => {
 
     const fetchOffres = async () => {
         try {
-            const res = await axios.get('http://127.0.0.1:8000/api/offres/', config);
+            const res = await axios.get('http://127.0.0.1:8000/api/offres/', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setOffres(res.data);
         } catch (err) {
             console.error("Erreur chargement offres");
         }
     };
 
-    // دالة لفتح النموذج في وضع التعديل
     const handleEditClick = (offre) => {
         setNewOffre({
             titre: offre.titre,
@@ -46,6 +46,9 @@ const ManageOffres = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        const currentToken = localStorage.getItem('access');
+        const config = { headers: { Authorization: `Bearer ${currentToken}` } };
+
         try {
             const dataToSend = {
                 ...newOffre,
@@ -54,13 +57,16 @@ const ManageOffres = () => {
 
             if (isEditing) {
                 await axios.put(`http://127.0.0.1:8000/api/offres/${currentId}/`, dataToSend, config);
+                alert("Offre modifiée avec succès !");
             } else {
                 await axios.post('http://127.0.0.1:8000/api/offres/', dataToSend, config);
+                alert("Offre publiée avec succès !");
             }
 
             resetForm();
             fetchOffres();
         } catch (err) {
+            console.error("Erreur API:", err.response);
             const errorMsg = err.response?.data ? JSON.stringify(err.response.data) : "Erreur lors de l'opération";
             alert(errorMsg);
         }
@@ -76,7 +82,9 @@ const ManageOffres = () => {
     const handleDelete = async (id) => {
         if (window.confirm("Voulez-vous supprimer cette offre ?")) {
             try {
-                await axios.delete(`http://127.0.0.1:8000/api/offres/${id}/`, config);
+                await axios.delete(`http://127.0.0.1:8000/api/offres/${id}/`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
                 fetchOffres();
             } catch (err) {
                 alert("Erreur lors de la suppression");
@@ -101,7 +109,7 @@ const ManageOffres = () => {
 
             {showForm && (
                 <div style={styles.glassForm}>
-                    <h3 style={styles.formTitle}>
+                    <h3 style={{...styles.formTitle, color: 'var(--text-main)'}}>
                         <span>{isEditing ? "📝 Modifier l'offre" : "📌 Nouvelle offre"}</span>
                     </h3>
                     <form onSubmit={handleSubmit}>
@@ -166,8 +174,8 @@ const ManageOffres = () => {
                         {offres.map(o => (
                             <tr key={o.id} style={styles.tr}>
                                 <td style={styles.td}>
-                                    <div style={{fontWeight: '700', color: '#fff'}}>{o.titre}</div>
-                                    <div style={{fontSize: '12px', opacity: 0.6, marginTop: '4px'}}>
+                                    <div style={{fontWeight: '700', color: 'var(--text-main)'}}>{o.titre}</div>
+                                    <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px'}}>
                                         {o.description.substring(0, 50)}...
                                     </div>
                                 </td>
@@ -197,32 +205,31 @@ const ManageOffres = () => {
 };
 
 const styles = {
-    // ... التنسيقات السابقة مع الإضافات الجديدة ...
-    pageWrapper: { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', color: '#e2e8f0' },
+    pageWrapper: { padding: '40px 20px', maxWidth: '1200px', margin: '0 auto', color: 'var(--text-main)' },
     topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' },
-    mainTitle: { fontSize: '28px', fontWeight: 'bold' },
-    subTitle: { color: '#94a3b8', fontSize: '14px' },
+    mainTitle: { fontSize: '28px', fontWeight: 'bold', color: 'var(--text-main)' },
+    subTitle: { color: 'var(--text-muted)', fontSize: '14px' },
     toggleBtn: (isOpen) => ({ padding: '10px 20px', backgroundColor: isOpen ? '#ef4444' : '#6366f1', color: 'white', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600' }),
-    glassForm: { background: 'rgba(30, 41, 59, 0.7)', padding: '30px', borderRadius: '20px', border: '1px solid #334155', marginBottom: '30px' },
+    glassForm: { background: 'var(--bg-sidebar)', padding: '30px', borderRadius: '20px', border: '1px solid rgba(128,128,128,0.2)', marginBottom: '30px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' },
     formTitle: { marginBottom: '20px', fontSize: '18px' },
     inputGrid: { display: 'flex', gap: '20px' },
     fieldContainer: { display: 'flex', flexDirection: 'column', flex: 1 },
-    label: { marginBottom: '8px', fontSize: '13px', color: '#94a3b8' },
-    glassInput: { padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', width: '100%', outline: 'none' },
-    glassTextarea: { padding: '12px', borderRadius: '10px', background: '#0f172a', border: '1px solid #334155', color: 'white', width: '100%', height: '100px', outline: 'none' },
+    label: { marginBottom: '8px', fontSize: '13px', color: 'var(--text-muted)' },
+    glassInput: { padding: '12px', borderRadius: '10px', background: 'var(--bg-main)', border: '1px solid rgba(128,128,128,0.2)', color: 'var(--text-main)', width: '100%', outline: 'none' },
+    glassTextarea: { padding: '12px', borderRadius: '10px', background: 'var(--bg-main)', border: '1px solid rgba(128,128,128,0.2)', color: 'var(--text-main)', width: '100%', height: '100px', outline: 'none' },
     submitBtn: { width: '100%', marginTop: '20px', padding: '14px', backgroundColor: '#6366f1', color: 'white', borderRadius: '10px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
-    tableCard: { background: 'rgba(30, 41, 59, 0.4)', borderRadius: '20px', border: '1px solid #334155', overflow: 'hidden' },
+    tableCard: { background: 'var(--bg-sidebar)', borderRadius: '20px', border: '1px solid rgba(128,128,128,0.2)', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' },
     table: { width: '100%', borderCollapse: 'collapse' },
-    headerRow: { background: '#1e293b' },
-    th: { padding: '15px', textAlign: 'left', fontSize: '12px', color: '#94a3b8' },
-    tr: { borderBottom: '1px solid #334155' },
+    headerRow: { background: 'rgba(128,128,128,0.05)' },
+    th: { padding: '15px', textAlign: 'left', fontSize: '12px', color: 'var(--text-muted)', borderBottom: '1px solid rgba(128,128,128,0.1)' },
+    tr: { borderBottom: '1px solid rgba(128,128,128,0.1)', transition: '0.3s' },
     td: { padding: '15px' },
     skillsContainer: { display: 'flex', gap: '5px', flexWrap: 'wrap' },
-    skillTag: { padding: '2px 8px', background: '#334155', borderRadius: '5px', fontSize: '11px' },
-    expBadge: { padding: '4px 10px', background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' },
+    skillTag: { padding: '4px 10px', background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', borderRadius: '6px', fontSize: '11px', fontWeight: '600' },
+    expBadge: { padding: '4px 10px', background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' },
     actionGroup: { display: 'flex', gap: '10px', justifyContent: 'center' },
-    editBtn: { background: 'none', border: '1px solid #334155', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer' },
-    deleteBtn: { background: 'none', border: '1px solid #ef444455', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer' }
+    editBtn: { background: 'rgba(128,128,128,0.05)', border: '1px solid rgba(128,128,128,0.2)', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', transition: '0.2s' },
+    deleteBtn: { background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', transition: '0.2s' }
 };
 
 export default ManageOffres;

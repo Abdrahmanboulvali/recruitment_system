@@ -1,38 +1,39 @@
-.App {
-  text-align: center;
+/* تعريف المتغيرات في جذر الملف */
+:root {
+  --bg-main: #0f172a;
+  --bg-sidebar: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent-primary: #6366f1;
+  --accent-hover: #4f46e5;
+  --success-green: #10b981;
+  --transition-speed: 0.3s;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+/* تنسيقات عامة للجسم */
+body {
+  margin: 0;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  transition: background-color var(--transition-speed), color var(--transition-speed);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* تأثير النبض لزر "Postuler" */
+@keyframes pulse-animation {
+  0% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0.7); }
+  70% { box-shadow: 0 0 0 15px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0px rgba(16, 185, 129, 0); }
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+.btn-pulse {
+  animation: pulse-animation 2s infinite;
+  background-color: var(--success-green) !important;
 }
 
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* تأثير ظهور البطاقة */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }

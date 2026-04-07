@@ -17,8 +17,8 @@ class CandidatSerializer(serializers.ModelSerializer):
 class CandidatureSerializer(serializers.ModelSerializer):
     class Meta:
         model = Candidature
-        # تحديد الحقول يضمن أن 'statut' قابل للتعديل (Writeable)
-        fields = ['id', 'candidat', 'offre', 'cv_file', 'statut', 'score', 'date_postulation']
+        fields = '__all__' # سيقوم بجلب كل الحقول الموجودة في الموديل
+
 
 class DashboardStatsSerializer(serializers.Serializer):
     total_offres = serializers.IntegerField()
@@ -31,7 +31,27 @@ from djoser.serializers import UserSerializer as BaseUserSerializer
 
 class UserSerializer(BaseUserSerializer):
     class Meta(BaseUserSerializer.Meta):
-        fields = ('id', 'email', 'username', 'role')
+        fields = ('id', 'email', 'username', 'role', 'photo')
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .serializers import UserSerializer
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        # partial=True للسماح بتحديث الصورة فقط دون المساس بالبقية
+        serializer = UserSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)
 
 
 from rest_framework import serializers

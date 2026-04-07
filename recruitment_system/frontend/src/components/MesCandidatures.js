@@ -6,7 +6,6 @@ const MesCandidatures = () => {
     const [offres, setOffres] = useState({});
     const [loading, setLoading] = useState(true);
 
-    // دالة جلب البيانات (بقيت كما هي مع إمكانية استدعائها مجدداً عند الحذف)
     const fetchMyData = async () => {
         try {
             const token = localStorage.getItem('access');
@@ -20,7 +19,6 @@ const MesCandidatures = () => {
             const userRes = await axios.get('http://127.0.0.1:8000/api/user-info/', config);
             const candidatesRes = await axios.get('http://127.0.0.1:8000/api/candidats/', config);
 
-            // العثور على البروفايل الخاص بالمستخدم الحالي
             const myProfile = candidatesRes.data.find(c => c.user === userRes.data.id);
 
             if (myProfile) {
@@ -39,15 +37,12 @@ const MesCandidatures = () => {
         fetchMyData();
     }, []);
 
-    // دالة إلغاء الترشح الجديدة
     const handleAnnuler = async (id) => {
         if (window.confirm("Voulez-vous vraiment annuler cette candidature ?")) {
             try {
                 const token = localStorage.getItem('access');
                 const config = { headers: { Authorization: `Bearer ${token}` } };
-
                 await axios.delete(`http://127.0.0.1:8000/api/candidatures/${id}/`, config);
-                // تحديث القائمة فوراً بعد الحذف
                 fetchMyData();
             } catch (err) {
                 alert("Erreur lors de l'annulation de la candidature.");
@@ -58,7 +53,7 @@ const MesCandidatures = () => {
     const getOffreTitle = (id) => offres[id] || `Offre #${id}`;
 
     if (loading) return (
-        <div style={{textAlign:'center', padding:'100px', fontWeight: 'bold', opacity: 0.7}}>
+        <div style={{textAlign:'center', padding:'100px', fontWeight: 'bold', opacity: 0.7, color: 'var(--text-main)'}}>
             Analyse de vos candidatures en cours...
         </div>
     );
@@ -67,7 +62,7 @@ const MesCandidatures = () => {
         <div style={styles.pageWrapper}>
             <header style={styles.header}>
                 <h2 style={styles.title}>Mes Candidatures</h2>
-                <p style={{ opacity: 0.7 }}>Suivez l'état de vos demandes et vos scores d'adéquation</p>
+                <p style={{ opacity: 0.7, color: 'var(--text-main)' }}>Suivez l'état de vos demandes et vos scores d'adéquation</p>
             </header>
 
             <div style={styles.tableCard}>
@@ -79,7 +74,7 @@ const MesCandidatures = () => {
                                 <th style={styles.th}>Date</th>
                                 <th style={styles.th}>Score IA</th>
                                 <th style={styles.th}>Statut</th>
-                                <th style={{...styles.th, textAlign: 'center'}}>Action</th> {/* عمود جديد */}
+                                <th style={{...styles.th, textAlign: 'center'}}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -89,13 +84,13 @@ const MesCandidatures = () => {
                                         <td style={{...styles.td, fontWeight: 'bold', color: '#6366f1'}}>
                                             {getOffreTitle(can.offre)}
                                         </td>
-                                        <td style={styles.td}>
+                                        <td style={{...styles.td, color: 'var(--text-main)'}}>
                                             {new Date(can.date_postulation).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </td>
                                         <td style={styles.td}>
                                             <div style={styles.scoreContainer}>
                                                 <div style={styles.scoreBar(can.score)}></div>
-                                                <span style={{fontWeight: 'bold'}}>{can.score}%</span>
+                                                <span style={{fontWeight: 'bold', color: 'var(--text-main)'}}>{can.score}%</span>
                                             </div>
                                         </td>
                                         <td style={{...styles.td, textAlign: 'center'}}>
@@ -103,20 +98,14 @@ const MesCandidatures = () => {
                                                 {can.statut || 'En attente'}
                                             </span>
                                         </td>
-                                        {/* زر الإلغاء المضاف */}
                                         <td style={{...styles.td, textAlign: 'center'}}>
-                                            <button
-                                                onClick={() => handleAnnuler(can.id)}
-                                                style={styles.annulerBtn}
-                                            >
-                                                Annuler
-                                            </button>
+                                            <button onClick={() => handleAnnuler(can.id)} style={styles.annulerBtn}>Annuler</button>
                                         </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="5" style={{...styles.td, textAlign: 'center', padding: '40px', opacity: 0.5}}>
+                                    <td colSpan="5" style={{...styles.td, textAlign: 'center', padding: '40px', opacity: 0.5, color: 'var(--text-main)'}}>
                                         Vous n'avez postulé à aucune offre pour le moment.
                                     </td>
                                 </tr>
@@ -129,23 +118,28 @@ const MesCandidatures = () => {
     );
 };
 
-// التنسيقات (تم إضافة تنسيق annulerBtn)
 const styles = {
-    // ... التنسيقات السابقة كما هي تماماً ...
-    pageWrapper: { padding: '40px 20px', maxWidth: '1100px', margin: '0 auto', minHeight: '100vh' },
+    pageWrapper: { padding: '40px 20px', maxWidth: '1100px', margin: '0 auto', minHeight: '100vh', color: 'var(--text-main)', transition: 'color 0.3s ease' },
     header: { marginBottom: '35px', borderLeft: '5px solid #10b981', paddingLeft: '20px' },
-    title: { fontSize: '30px', fontWeight: '800', margin: '0 0 5px 0' },
-    tableCard: { background: 'rgba(255, 255, 255, 0.03)', backdropFilter: 'blur(12px)', borderRadius: '24px', border: '1px solid rgba(255, 255, 255, 0.1)', overflow: 'hidden', boxShadow: '0 15px 35px rgba(0,0,0,0.1)' },
+    title: { fontSize: '30px', fontWeight: '800', margin: '0 0 5px 0', color: 'var(--text-main)' },
+    tableCard: {
+        background: 'var(--bg-sidebar)', // تغيير الخلفية لتكون متناسقة مع الثيم
+        backdropFilter: 'blur(12px)',
+        borderRadius: '24px',
+        border: '1px solid rgba(128, 128, 128, 0.1)',
+        overflow: 'hidden',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.05)'
+    },
     table: { width: '100%', borderCollapse: 'collapse', color: 'inherit' },
     headerRow: { background: 'rgba(16, 185, 129, 0.1)' },
-    th: { padding: '20px', textAlign: 'left', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.6 },
-    tr: { borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: '0.3s ease' },
+    th: { padding: '20px', textAlign: 'left', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)' },
+    tr: { borderBottom: '1px solid rgba(128, 128, 128, 0.1)', transition: '0.3s ease' },
     td: { padding: '20px', fontSize: '15px' },
     scoreContainer: { display: 'flex', alignItems: 'center', gap: '10px' },
     scoreBar: (score) => ({
         width: '40px', height: '6px', borderRadius: '10px',
-        background: `linear-gradient(90deg, #6366f1 ${score}%, rgba(255,255,255,0.1) ${score}%)`,
-        border: '1px solid rgba(255,255,255,0.05)'
+        background: `linear-gradient(90deg, #6366f1 ${score}%, rgba(128,128,128,0.2) ${score}%)`,
+        border: '1px solid rgba(128,128,128,0.1)'
     }),
     statusBadge: (statut) => {
         const isAccepted = statut === 'Accepté' || statut === 'Acceptée';
@@ -155,17 +149,10 @@ const styles = {
             color: isAccepted ? '#10b981' : '#f59e0b', display: 'inline-block'
         };
     },
-    // التنسيق الجديد لزر الإلغاء
     annulerBtn: {
-        padding: '6px 14px',
-        borderRadius: '10px',
-        fontSize: '12px',
-        fontWeight: 'bold',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        color: '#ef4444',
-        border: '1px solid rgba(239, 68, 68, 0.2)',
-        cursor: 'pointer',
-        transition: '0.3s'
+        padding: '6px 14px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)',
+        cursor: 'pointer', transition: '0.3s'
     }
 };
 

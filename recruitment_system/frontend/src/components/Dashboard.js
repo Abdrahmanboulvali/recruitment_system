@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
   const [role, setRole] = useState('');
-  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem('access');
-    const userRole = localStorage.getItem('role'); // تأكد من تخزينه عند Login
+    const userRole = localStorage.getItem('role');
     setRole(userRole);
 
     axios.get('http://127.0.0.1:8000/api/stats/', {
@@ -36,47 +34,63 @@ const Dashboard = () => {
       </header>
 
       <div style={styles.statsGrid}>
-        <div onClick={() => navigate('/manage-offres')} style={styles.card}>
+        {/* بطاقة العروض */}
+        <div style={styles.card}>
           <div style={iconCircle('#6366f1')}>💼</div>
-          <h3>Offres</h3>
+          <h3 style={styles.cardLabel}>Total Offres</h3>
           <p style={styles.statNum}>{data.total_offres}</p>
-          <small style={{color: '#6366f1'}}>Gérer les postes →</small>
         </div>
 
-        <div onClick={() => navigate('/manage-candidatures')} style={styles.card}>
+        {/* بطاقة الترشيحات */}
+        <div style={styles.card}>
           <div style={iconCircle('#10b981')}>📄</div>
-          <h3>Candidatures</h3>
+          <h3 style={styles.cardLabel}>Total Candidatures</h3>
           <p style={styles.statNum}>{data.total_candidatures}</p>
-          <small style={{color: '#10b981'}}>Visualiser →</small>
         </div>
 
+        {/* بطاقة المستخدمين (تظهر فقط للمدير العام) */}
         {role === 'DG' && (
-          <div onClick={() => navigate('/users')} style={{...styles.card, border: '1px solid #6366f1'}}>
+          <div style={styles.card}>
             <div style={iconCircle('#8b5cf6')}>👥</div>
-            <h3>Utilisateurs</h3>
+            <h3 style={styles.cardLabel}>Utilisateurs Actifs</h3>
             <p style={styles.statNum}>{data.total_users}</p>
-            <small style={{color: '#8b5cf6'}}>Administration →</small>
           </div>
         )}
 
+        {/* بطاقة متوسط النقاط */}
         <div style={styles.card}>
           <div style={iconCircle('#f59e0b')}>🎯</div>
-          <h3>Score Moyen</h3>
+          <h3 style={styles.cardLabel}>Score Moyen IA</h3>
           <p style={styles.statNum}>{data.avg_score}%</p>
-          <small>Précision IA</small>
         </div>
       </div>
 
       <div style={styles.chartContainer}>
         <div style={styles.chartCard}>
-          <h4 style={{marginBottom: '20px'}}>Répartition de la Pertinence des CV</h4>
+          <h4 style={{ marginBottom: '20px', color: 'var(--text-main)', textAlign: 'center' }}>
+            Répartition de la Pertinence des CV
+          </h4>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie data={pieData} dataKey="value" innerRadius={60} outerRadius={85} paddingAngle={5}>
+              <Pie
+                data={pieData}
+                dataKey="value"
+                innerRadius={65}
+                outerRadius={90}
+                paddingAngle={8}
+                stroke="none"
+              >
                 {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
               </Pie>
-              <Tooltip contentStyle={{background: '#1e2532', border: 'none', borderRadius: '10px'}} />
-              <Legend />
+              <Tooltip
+                contentStyle={{
+                  background: 'var(--bg-sidebar)',
+                  border: '1px solid rgba(128,128,128,0.2)',
+                  borderRadius: '12px',
+                  color: 'var(--text-main)'
+                }}
+              />
+              <Legend verticalAlign="bottom" height={36} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -85,23 +99,41 @@ const Dashboard = () => {
   );
 };
 
+// وظيفة مساعدة لرسم خلفية الأيقونات
 const iconCircle = (color) => ({
-  width: '50px', height: '50px', borderRadius: '14px',
+  width: '56px', height: '56px', borderRadius: '16px',
   backgroundColor: `${color}15`, color: color,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  fontSize: '24px', margin: '0 auto 15px'
+  fontSize: '28px', margin: '0 auto 20px'
 });
 
 const styles = {
-  pageWrapper: { padding: '40px', minHeight: '100vh', color: 'white' },
-  title: { fontSize: '32px', fontWeight: '900', marginBottom: '5px' },
-  subtitle: { opacity: 0.6, marginBottom: '40px' },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '25px' },
-  card: { background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', borderRadius: '24px', padding: '30px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', transition: '0.3s' },
-  statNum: { fontSize: '36px', fontWeight: 'bold', margin: '10px 0' },
-  chartContainer: { marginTop: '40px', display: 'flex', justifyContent: 'center' },
-  chartCard: { background: 'rgba(255,255,255,0.03)', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '700px', border: '1px solid rgba(255,255,255,0.05)' },
-  loader: { textAlign: 'center', marginTop: '100px', fontSize: '20px', opacity: 0.5 }
+  pageWrapper: { padding: '40px', minHeight: '100vh', background: 'var(--bg-main)', color: 'var(--text-main)' },
+  title: { fontSize: '32px', fontWeight: '900', marginBottom: '8px', color: 'var(--text-main)' },
+  subtitle: { color: 'var(--text-muted)', marginBottom: '45px', fontSize: '16px' },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '25px' },
+  card: {
+    background: 'var(--bg-sidebar)',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.04)',
+    borderRadius: '28px',
+    padding: '35px 20px',
+    textAlign: 'center',
+    border: '1px solid rgba(128,128,128,0.08)',
+    transition: 'all 0.3s ease'
+  },
+  cardLabel: { color: 'var(--text-muted)', fontSize: '15px', fontWeight: '500', textTransform: 'uppercase', letterSpacing: '0.5px' },
+  statNum: { fontSize: '42px', fontWeight: '800', margin: '15px 0 0', color: 'var(--text-main)' },
+  chartContainer: { marginTop: '50px', display: 'flex', justifyContent: 'center' },
+  chartCard: {
+    background: 'var(--bg-sidebar)',
+    padding: '40px',
+    borderRadius: '32px',
+    width: '100%',
+    maxWidth: '850px',
+    border: '1px solid rgba(128,128,128,0.08)',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.03)'
+  },
+  loader: { textAlign: 'center', marginTop: '100px', fontSize: '20px', color: 'var(--text-muted)', fontWeight: '300' }
 };
 
 export default Dashboard;
