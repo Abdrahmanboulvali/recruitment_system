@@ -62,7 +62,7 @@ const MesCandidatures = () => {
         <div style={styles.pageWrapper}>
             <header style={styles.header}>
                 <h2 style={styles.title}>Mes Candidatures</h2>
-                <p style={{ opacity: 0.7, color: 'var(--text-main)' }}>Suivez l'état de vos demandes et vos scores d'adéquation</p>
+                <p style={{ opacity: 0.7, color: 'var(--text-main)' }}>Suivez l'état d'avancement de vos demandes d'emploi</p>
             </header>
 
             <div style={styles.tableCard}>
@@ -71,9 +71,9 @@ const MesCandidatures = () => {
                         <thead>
                             <tr style={styles.headerRow}>
                                 <th style={styles.th}>Poste convoité</th>
-                                <th style={styles.th}>Date</th>
-                                <th style={styles.th}>Score IA</th>
-                                <th style={styles.th}>Statut</th>
+                                <th style={styles.th}>Date de postulation</th>
+                                {/* تم حذف عمود Score IA من هنا */}
+                                <th style={{...styles.th, textAlign: 'center'}}>Statut</th>
                                 <th style={{...styles.th, textAlign: 'center'}}>Action</th>
                             </tr>
                         </thead>
@@ -87,12 +87,7 @@ const MesCandidatures = () => {
                                         <td style={{...styles.td, color: 'var(--text-main)'}}>
                                             {new Date(can.date_postulation).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                                         </td>
-                                        <td style={styles.td}>
-                                            <div style={styles.scoreContainer}>
-                                                <div style={styles.scoreBar(can.score)}></div>
-                                                <span style={{fontWeight: 'bold', color: 'var(--text-main)'}}>{can.score}%</span>
-                                            </div>
-                                        </td>
+                                        {/* تم حذف خانة السكور من هنا */}
                                         <td style={{...styles.td, textAlign: 'center'}}>
                                             <span style={styles.statusBadge(can.statut)}>
                                                 {can.statut || 'En attente'}
@@ -105,7 +100,7 @@ const MesCandidatures = () => {
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="5" style={{...styles.td, textAlign: 'center', padding: '40px', opacity: 0.5, color: 'var(--text-main)'}}>
+                                    <td colSpan="4" style={{...styles.td, textAlign: 'center', padding: '40px', opacity: 0.5, color: 'var(--text-main)'}}>
                                         Vous n'avez postulé à aucune offre pour le moment.
                                     </td>
                                 </tr>
@@ -123,7 +118,7 @@ const styles = {
     header: { marginBottom: '35px', borderLeft: '5px solid #10b981', paddingLeft: '20px' },
     title: { fontSize: '30px', fontWeight: '800', margin: '0 0 5px 0', color: 'var(--text-main)' },
     tableCard: {
-        background: 'var(--bg-sidebar)', // تغيير الخلفية لتكون متناسقة مع الثيم
+        background: 'var(--bg-sidebar)',
         backdropFilter: 'blur(12px)',
         borderRadius: '24px',
         border: '1px solid rgba(128, 128, 128, 0.1)',
@@ -135,18 +130,25 @@ const styles = {
     th: { padding: '20px', textAlign: 'left', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-muted)' },
     tr: { borderBottom: '1px solid rgba(128, 128, 128, 0.1)', transition: '0.3s ease' },
     td: { padding: '20px', fontSize: '15px' },
-    scoreContainer: { display: 'flex', alignItems: 'center', gap: '10px' },
-    scoreBar: (score) => ({
-        width: '40px', height: '6px', borderRadius: '10px',
-        background: `linear-gradient(90deg, #6366f1 ${score}%, rgba(128,128,128,0.2) ${score}%)`,
-        border: '1px solid rgba(128,128,128,0.1)'
-    }),
     statusBadge: (statut) => {
-        const isAccepted = statut === 'Accepté' || statut === 'Acceptée';
+        const statusText = statut?.toLowerCase();
+        const isAccepted = statusText === 'accepté' || statusText === 'acceptée';
+        const isRejected = statusText === 'refusé' || statusText === 'refusée';
+
+        let bgColor = 'rgba(245, 158, 11, 0.15)'; // Default orange
+        let textColor = '#f59e0b';
+
+        if (isAccepted) {
+            bgColor = 'rgba(16, 185, 129, 0.15)';
+            textColor = '#10b981';
+        } else if (isRejected) {
+            bgColor = 'rgba(239, 68, 68, 0.15)';
+            textColor = '#ef4444';
+        }
+
         return {
             padding: '6px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 'bold',
-            backgroundColor: isAccepted ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-            color: isAccepted ? '#10b981' : '#f59e0b', display: 'inline-block'
+            backgroundColor: bgColor, color: textColor, display: 'inline-block'
         };
     },
     annulerBtn: {

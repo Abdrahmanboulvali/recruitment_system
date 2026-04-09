@@ -31,7 +31,22 @@ from djoser.serializers import UserSerializer as BaseUserSerializer
 
 class UserSerializer(BaseUserSerializer):
     class Meta(BaseUserSerializer.Meta):
-        fields = ('id', 'email', 'username', 'role', 'photo')
+        fields = ('id', 'email', 'username', 'role', 'photo', 'is_active')
+
+
+from djoser.serializers import TokenCreateSerializer
+from rest_framework import serializers
+
+
+class CustomTokenCreateSerializer(TokenCreateSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        # التحقق إذا كان المستخدم نشطاً أم لا
+        if not self.user.is_active:
+            raise serializers.ValidationError("Votre compte est désactivé. Veuillez contacter l'administration.")
+
+        return data
 
 from rest_framework.views import APIView
 from rest_framework.response import Response

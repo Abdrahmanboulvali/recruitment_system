@@ -720,3 +720,8 @@ class ChangePasswordView(APIView):
 
         return Response({"detail": "Mot de passe mis à jour avec succès !"}, status=status.HTTP_200_OK)
 
+# أضف هذا الكلاس لتمكين التحديث (PATCH) للمستخدمين
+class UserUpdateView(generics.UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated] # يمكنك تغييرها لـ IsAdminUser لزيادة الأمان

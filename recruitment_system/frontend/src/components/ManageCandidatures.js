@@ -48,15 +48,33 @@ const ManageCandidatures = () => {
         return cvPath.startsWith('http') ? cvPath : `${baseUrl}${cvPath}`;
     };
 
+    // وظيفة لتنظيف التعليقات من أي إشارة لـ O*NET أو مصطلحات خارجية
+    const cleanComment = (text) => {
+        if (!text) return "Aucune analyse disponible pour le moment.";
+        return text.replace(/O\*NET/gi, "Système").replace(/Matching/gi, "Analyse");
+    };
+
     const filteredCandidatures = candidatures.filter(can => {
         const name = (candidats[can.candidat] || "").toLowerCase();
-        const matchesSearch = name.includes(searchTerm.toLowerCase());
+        const job = (offresData[can.offre]?.titre || "").toLowerCase();
+        const score = can.score.toString();
+        const search = searchTerm.toLowerCase();
+
+        const matchesSearch = name.includes(search) || job.includes(search) || score.includes(search);
         const matchesScore = can.score >= minScore;
         return matchesSearch && matchesScore;
     });
 
     const pending = filteredCandidatures.filter(can =>
         can.statut?.toLowerCase().includes('attente')
+    );
+
+    const accepted = filteredCandidatures.filter(can =>
+        can.statut?.toLowerCase().includes('accepté')
+    );
+
+    const rejected = filteredCandidatures.filter(can =>
+        can.statut?.toLowerCase().includes('refusé')
     );
 
     const handleOpenAnalysis = (can) => {
@@ -77,58 +95,32 @@ const ManageCandidatures = () => {
         } catch (err) { alert("Erreur"); }
     };
 
-    if (loading) return <div style={styles.loader}>Chargement...</div>;
-
-    return (
-        <div style={styles.pageWrapper}>
-            <header style={styles.header}>
-                <h2 style={styles.title}>Candidatures En Attente ({pending.length})</h2>
-                <p style={{ color: 'var(--text-muted)' }}>Gérez et analysez les profils via l'IA</p>
-            </header>
-
-            <div style={styles.filterBar}>
-                <div style={{ flex: 2 }}>
-                    <label style={styles.label}>RECHERCHER UN CANDIDAT</label>
-                    <input
-                        type="text"
-                        placeholder="Ex: Deli Ali..."
-                        style={styles.searchInput}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <label style={styles.label}>SCORE IA MINIMUM: {minScore}%</label>
-                    <input
-                        type="range" min="0" max="100"
-                        value={minScore}
-                        style={styles.rangeInput}
-                        onChange={(e) => setMinScore(e.target.value)}
-                    />
-                </div>
-            </div>
-
+    const CandidatureTable = ({ data, title, color }) => (
+        <div style={{ marginTop: '40px' }}>
+            <h3 style={{ ...styles.title, fontSize: '20px', color: color || 'var(--text-main)', marginBottom: '15px' }}>
+                {title} ({data.length})
+            </h3>
             <div style={styles.tableContainer}>
                 <table style={styles.table}>
                     <thead>
                         <tr style={styles.headerRow}>
                             <th style={styles.th}>Candidat</th>
                             <th style={styles.th}>Offre convoitée</th>
-                            <th style={styles.th}>Score IA</th>
+                            <th style={styles.th}>Adéquation</th>
                             <th style={styles.th}>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {pending.map(can => (
+                        {data.map(can => (
                             <tr key={can.id} style={styles.tr}>
-                                <td style={{...styles.td, fontWeight: '600'}}>{candidats[can.candidat]}</td>
+                                <td style={{ ...styles.td, fontWeight: '600' }}>{candidats[can.candidat]}</td>
                                 <td style={styles.td}>{offresData[can.offre]?.titre}</td>
                                 <td style={styles.td}>
                                     <div style={styles.scoreCell}>
                                         <div style={styles.miniBarContainer}>
                                             <div style={styles.miniBarFill(can.score)}></div>
                                         </div>
-                                        <span style={{fontWeight: 'bold'}}>{can.score}%</span>
+                                        <span style={{ fontWeight: 'bold' }}>{can.score}%</span>
                                     </div>
                                 </td>
                                 <td style={styles.td}>
@@ -139,6 +131,43 @@ const ManageCandidatures = () => {
                     </tbody>
                 </table>
             </div>
+        </div>
+    );
+
+    if (loading) return <div style={styles.loader}>Chargement...</div>;
+
+    return (
+        <div style={styles.pageWrapper}>
+            <header style={styles.header}>
+                <h2 style={styles.title}>Gestion des Candidatures</h2>
+                <p style={{ color: 'var(--text-muted)' }}>Analyse et suivi des profils candidats</p>
+            </header>
+
+            <div style={styles.filterBar}>
+                <div style={{ flex: 2 }}>
+                    <label style={styles.label}>RECHERCHE GLOBALE (Nom, Poste, Score)</label>
+                    <input
+                        type="text"
+                        placeholder="Rechercher partout..."
+                        style={styles.searchInput}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div style={{ flex: 1 }}>
+                    <label style={styles.label}>SCORE MINIMUM: {minScore}%</label>
+                    <input
+                        type="range" min="0" max="100"
+                        value={minScore}
+                        style={styles.rangeInput}
+                        onChange={(e) => setMinScore(e.target.value)}
+                    />
+                </div>
+            </div>
+
+            <CandidatureTable data={pending} title="Candidatures En Attente" color="#f59e0b" />
+            <CandidatureTable data={accepted} title="Candidatures Acceptées" color="#10b981" />
+            <CandidatureTable data={rejected} title="Candidatures Refusées" color="#ef4444" />
 
             {showModal && selectedCan && (
                 <div style={styles.modalOverlay} onClick={() => setShowModal(false)}>
@@ -147,7 +176,7 @@ const ManageCandidatures = () => {
                             <button onClick={() => setShowModal(false)} style={styles.modalBackBtn}>
                                 ❮ Retour à la liste
                             </button>
-                            <h3 style={{margin: 0, color: 'white'}}>Analyse de: {candidats[selectedCan.candidat]}</h3>
+                            <h3 style={{ margin: 0, color: 'white' }}>Détails de: {candidats[selectedCan.candidat]}</h3>
                             <button onClick={() => setShowModal(false)} style={styles.closeX}>×</button>
                         </div>
 
@@ -156,31 +185,48 @@ const ManageCandidatures = () => {
                                 <div style={styles.infoCard}>
                                     <p style={styles.infoLabel}>Poste:</p>
                                     <p style={styles.infoValue}>{offresData[selectedCan.offre]?.titre}</p>
-                                    <p style={styles.infoLabel}>Score d'adéquation:</p>
-                                    <p style={{...styles.infoValue, color: '#f59e0b', fontSize: '24px'}}>{selectedCan.score}%</p>
-                                    <hr style={styles.hr}/>
-                                    <p style={styles.infoLabel}>Analyse de l'IA (Commentaire):</p>
-                                    <p style={{...styles.infoValue, fontSize: '14px', fontWeight: 'normal', color: 'var(--text-muted)', lineHeight: '1.5'}}>
-                                        {selectedCan.commentaire_ia || "Aucune analyse disponible pour le moment."}
+                                    <p style={styles.infoLabel}>Taux de correspondance:</p>
+                                    <p style={{ ...styles.infoValue, color: '#f59e0b', fontSize: '24px' }}>{selectedCan.score}%</p>
+                                    <hr style={styles.hr} />
+                                    <p style={styles.infoLabel}>Analyse du profil:</p>
+                                    <p style={{ ...styles.infoValue, fontSize: '14px', fontWeight: 'normal', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                                        {cleanComment(selectedCan.commentaire_ia)}
                                     </p>
                                 </div>
+
                                 <div style={styles.modalActions}>
-                                    <button onClick={() => handleUpdateStatus(selectedCan.id, 'Accepté')} style={styles.btnModalAccept}>Accepter le profil</button>
-                                    <button onClick={() => handleUpdateStatus(selectedCan.id, 'Refusé')} style={styles.btnModalRefuse}>Refuser le profil</button>
+                                    {selectedCan.statut?.toLowerCase().includes('attente') ? (
+                                        <>
+                                            <button onClick={() => handleUpdateStatus(selectedCan.id, 'Accepté')} style={styles.btnModalAccept}>Accepter le profil</button>
+                                            <button onClick={() => handleUpdateStatus(selectedCan.id, 'Refusé')} style={styles.btnModalRefuse}>Refuser le profil</button>
+                                        </>
+                                    ) : (
+                                        <div style={{
+                                            padding: '15px',
+                                            textAlign: 'center',
+                                            borderRadius: '8px',
+                                            fontWeight: 'bold',
+                                            background: selectedCan.statut?.toLowerCase().includes('accepté') ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                            color: selectedCan.statut?.toLowerCase().includes('accepté') ? '#10b981' : '#ef4444',
+                                            border: `1px solid ${selectedCan.statut?.toLowerCase().includes('accepté') ? '#10b981' : '#ef4444'}`
+                                        }}>
+                                            {selectedCan.statut?.toLowerCase().includes('accepté') ? '✓ Candidature Acceptée' : '✕ Candidature Refusée'}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
                             <div style={styles.cvSide}>
                                 <div style={styles.cvFallback}>
-                                    <div style={{fontSize: '50px', marginBottom: '15px'}}>📄</div>
-                                    <p style={{color: '#1e293b', fontWeight: 'bold'}}>Document PDF</p>
+                                    <div style={{ fontSize: '50px', marginBottom: '15px' }}>📄</div>
+                                    <p style={{ color: '#1e293b', fontWeight: 'bold' }}>Document PDF</p>
                                     <a
                                         href={getFullCvUrl(selectedCan.cv_file)}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         style={styles.btnOpenCV}
                                     >
-                                        👁️ Ouvrir le CV في نافذة جديدة
+                                        👁️ Ouvrir le CV dans une nouvelle fenêtre
                                     </a>
                                 </div>
                                 <iframe

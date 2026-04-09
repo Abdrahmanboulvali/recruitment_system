@@ -159,7 +159,12 @@ REST_FRAMEWORK = {
 DJOSER = {
     'SEND_ACTIVATION_EMAIL': False,
     'ACTIVATION_URL': 'activate/{uid}/{token}',
-    'SERIALIZERS': {},
+    'SERIALIZERS': {
+        'user': 'recruitment.serializers.UserSerializer',
+        'current_user': 'recruitment.serializers.UserSerializer',
+        # هذا السطر هو "القفل" الذي سيمنع تسجيل دخول الـ Inactive
+        'token_create': 'recruitment.serializers.CustomTokenCreateSerializer',
+    },
 
     'EMAIL': {
         'activation': 'djoser.email.ActivationEmail',
@@ -176,6 +181,9 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('JWT', 'Bearer'),
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'CHECK_REVOCATION': True,
 }
 
 CORS_ALLOW_CREDENTIALS = True

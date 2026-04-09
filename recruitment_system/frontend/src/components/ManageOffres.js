@@ -7,6 +7,9 @@ const ManageOffres = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [currentId, setCurrentId] = useState(null);
 
+    // --- حالة جديدة للتحكم في توسيع النصوص لكل عرض بشكل مستقل ---
+    const [expandedOffres, setExpandedOffres] = useState({});
+
     const [newOffre, setNewOffre] = useState({
         titre: '',
         description: '',
@@ -29,6 +32,14 @@ const ManageOffres = () => {
         } catch (err) {
             console.error("Erreur chargement offres");
         }
+    };
+
+    // دالة لتبديل حالة عرض الوصف (فتح/إغلاق)
+    const toggleDescription = (id) => {
+        setExpandedOffres(prev => ({
+            ...prev,
+            [id]: !prev[id]
+        }));
     };
 
     const handleEditClick = (offre) => {
@@ -171,32 +182,46 @@ const ManageOffres = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {offres.map(o => (
-                            <tr key={o.id} style={styles.tr}>
-                                <td style={styles.td}>
-                                    <div style={{fontWeight: '700', color: 'var(--text-main)'}}>{o.titre}</div>
-                                    <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px'}}>
-                                        {o.description.substring(0, 50)}...
-                                    </div>
-                                </td>
-                                <td style={styles.td}>
-                                    <div style={styles.skillsContainer}>
-                                        {o.competences_requises?.split(',').map((s, i) => (
-                                            <span key={i} style={styles.skillTag}>{s.trim()}</span>
-                                        ))}
-                                    </div>
-                                </td>
-                                <td style={styles.td}>
-                                    <span style={styles.expBadge}>{o.experience_min} ans</span>
-                                </td>
-                                <td style={{...styles.td, textAlign: 'center'}}>
-                                    <div style={styles.actionGroup}>
-                                        <button onClick={() => handleEditClick(o)} style={styles.editBtn}>✏️</button>
-                                        <button onClick={() => handleDelete(o.id)} style={styles.deleteBtn}>🗑️</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
+                        {offres.map(o => {
+                            const isExpanded = expandedOffres[o.id];
+                            const fullDesc = o.description || "";
+                            const shouldShowButton = fullDesc.length > 60;
+                            const displayedDesc = isExpanded
+                                ? fullDesc
+                                : fullDesc.substring(0, 60) + (shouldShowButton ? "..." : "");
+
+                            return (
+                                <tr key={o.id} style={styles.tr}>
+                                    <td style={styles.td}>
+                                        <div style={{fontWeight: '700', color: 'var(--text-main)'}}>{o.titre}</div>
+                                        <div style={{fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: '1.4'}}>
+                                            {displayedDesc}
+                                            {shouldShowButton && (
+                                                <span onClick={() => toggleDescription(o.id)} style={styles.voirPlus}>
+                                                    {isExpanded ? " Voir moins" : " Voir plus"}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td style={styles.td}>
+                                        <div style={styles.skillsContainer}>
+                                            {o.competences_requises?.split(',').map((s, i) => (
+                                                <span key={i} style={styles.skillTag}>{s.trim()}</span>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td style={styles.td}>
+                                        <span style={styles.expBadge}>{o.experience_min} ans</span>
+                                    </td>
+                                    <td style={{...styles.td, textAlign: 'center'}}>
+                                        <div style={styles.actionGroup}>
+                                            <button onClick={() => handleEditClick(o)} style={styles.editBtn}>✏️</button>
+                                            <button onClick={() => handleDelete(o.id)} style={styles.deleteBtn}>🗑️</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -229,7 +254,17 @@ const styles = {
     expBadge: { padding: '4px 10px', background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' },
     actionGroup: { display: 'flex', gap: '10px', justifyContent: 'center' },
     editBtn: { background: 'rgba(128,128,128,0.05)', border: '1px solid rgba(128,128,128,0.2)', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', transition: '0.2s' },
-    deleteBtn: { background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', transition: '0.2s' }
+    deleteBtn: { background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px', padding: '5px 10px', cursor: 'pointer', transition: '0.2s' },
+
+    // ستايل "Voir plus" المضاف
+    voirPlus: {
+        color: '#6366f1',
+        cursor: 'pointer',
+        fontWeight: 'bold',
+        marginLeft: '5px',
+        textDecoration: 'underline',
+        fontSize: '11px'
+    }
 };
 
 export default ManageOffres;
