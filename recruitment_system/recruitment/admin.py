@@ -24,3 +24,18 @@ class CandidatureAdmin(admin.ModelAdmin):
     # On rend le score "lecture seule" pour qu'il ne soit pas modifiable manuellement
     readonly_fields = ('score',)
     list_display = ('candidat', 'offre', 'statut', 'score')
+
+
+from django.contrib import admin
+from .models import Enterprise, SubscriptionPlan, SubscriptionRequest
+
+@admin.register(Enterprise)
+class EnterpriseAdmin(admin.ModelAdmin):
+    # إظهار الأعمدة الهامة في القائمة بما فيها ملف الإثبات
+    list_display = ('nom', 'type_entite', 'is_approved', 'current_plan')
+    list_filter = ('is_approved', 'type_entite')
+    search_fields = ('nom',)
+
+# تسجيل النماذج الأخرى لتظهر أيضاً
+admin.site.register(SubscriptionPlan)
+admin.site.register(SubscriptionRequest)

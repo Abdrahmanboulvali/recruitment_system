@@ -23,7 +23,7 @@ const AddAgent = () => {
                     'Authorization': `Bearer ${token}`
                 }
             });
-            setMessage('تم إنشاء حساب الوكيل بنجاح!');
+            setMessage('Le compte agent a été créé avec succès!');
             // تأكد من تفريغ الـ username أيضاً هنا
             setFormData({ username: '', email: '', password: '', departement: '' });
         } catch (error) {

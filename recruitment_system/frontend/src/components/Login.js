@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
-import '../App.css'; // استيراد ملف التنسيقات الذي يحتوي على الأنميشن والمتغيرات
+import '../App.css';
 
 const Login = () => {
     const [formData, setFormData] = useState({ email: '', password: '' });
@@ -18,25 +18,29 @@ const Login = () => {
             const response = await axios.post('http://127.0.0.1:8000/auth/jwt/create/', formData);
             localStorage.setItem('access', response.data.access);
 
-            // جلب دور المستخدم لتوجيهه للمسار الصحيح
             const userRes = await axios.get('http://127.0.0.1:8000/api/user-info/', {
                 headers: { Authorization: `Bearer ${response.data.access}` }
             });
 
-            // التعديل الجوهري: تخزين الرتبة في المتصفح لكي يراها السايدبار
             const rawRole = userRes.data.role.toUpperCase();
-            localStorage.setItem('role', rawRole);
 
-            // التوجيه بناءً على الرتبة المجلوبة
-            if (rawRole === 'CANDIDAT') {
+            // --- المنطق الجديد: تخزين البيانات الإضافية ---
+            localStorage.setItem('role', rawRole);
+            localStorage.setItem('enterprise_id', userRes.data.enterprise_id || '');
+            localStorage.setItem('enterprise_name', userRes.data.enterprise || '');
+            localStorage.setItem('username', userRes.data.username || '');
+
+            // --- التوجيه المحدث ليشمل SUPER_ADMIN ---
+            if (rawRole === 'SUPER_ADMIN') {
+                navigate('/AllStats'); // المسار الجديد لإدارة الشركات
+            } else if (rawRole === 'CANDIDAT') {
                 navigate('/espace-candidat');
-            } else if (rawRole === 'DG' || rawRole === 'DIRECTEUR GÉNÉRAL') {
+            } else if (rawRole === 'DG' || rawRole === 'DIRECTEUR GÉNÉRAL' || rawRole === 'DG_BUSINESS') {
                 navigate('/dashboard');
             } else {
                 navigate('/manage-offres');
             }
 
-            // تحديث الصفحة لضمان قراءة السايدبار للقيم الجديدة فوراً
             window.location.reload();
 
         } catch (err) {
@@ -45,7 +49,6 @@ const Login = () => {
         }
     };
 
-    // التنسيقات المحدثة لضمان الوضوح التام
     const theme = {
         background: isDarkMode ? 'var(--bg-main)' : '#f8fafc',
         cardBg: isDarkMode ? 'var(--bg-sidebar)' : 'rgba(255, 255, 255, 0.9)',
@@ -81,11 +84,18 @@ const Login = () => {
                         style={{ ...styles.input, backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.text }}
                         onChange={handleChange} required
                     />
-                    <input
-                        type="password" name="password" placeholder="Mot de passe"
-                        style={{ ...styles.input, backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.text }}
-                        onChange={handleChange} required
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <input
+                            type="password" name="password" placeholder="Mot de passe"
+                            style={{ ...styles.input, backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`, color: theme.text }}
+                            onChange={handleChange} required
+                        />
+                        <div style={{ textAlign: 'right' }}>
+                            <Link to="/forgot-password" style={{ fontSize: '12px', color: '#6366f1', textDecoration: 'none', fontWeight: '600' }}>
+                                Mot de passe oublié ?
+                            </Link>
+                        </div>
+                    </div>
 
                     {error && <p style={styles.errorText}>{error}</p>}
 

@@ -189,3 +189,32 @@ SIMPLE_JWT = {
 CORS_ALLOW_CREDENTIALS = True
 
 X_FRAME_OPTIONS = 'SAMEORIGIN'
+# settings.py
+# settings.py
+
+# السماح للترويسة في الطلبات الاستطلاعية
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-http-method-override', # تأكد من وجوده هنا
+]
+
+# إظهار الترويسة للمتصفح
+CORS_EXPOSE_HEADERS = ['X-HTTP-Method-Override']
+
+# تأكد أيضاً أن الطريقة مسموحة
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]

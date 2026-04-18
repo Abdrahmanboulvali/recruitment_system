@@ -15,6 +15,7 @@ const Profile = () => {
 
     const fileInputRef = useRef(null);
     const token = localStorage.getItem('access');
+    const API_BASE_URL = 'http://127.0.0.1:8000';
 
     useEffect(() => {
         fetchData();
@@ -22,7 +23,7 @@ const Profile = () => {
 
     const fetchData = async () => {
         try {
-            const res = await axios.get('http://127.0.0.1:8000/api/profile/', {
+            const res = await axios.get(`${API_BASE_URL}/api/profile/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setUser(res.data);
@@ -39,10 +40,15 @@ const Profile = () => {
         const formData = new FormData();
         formData.append('photo', file);
         try {
-            await axios.patch('http://127.0.0.1:8000/api/profile/', formData, {
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+            // تغيير PATCH إلى PUT لحل مشكلة Method Not Allowed
+            await axios.put(`${API_BASE_URL}/api/profile/`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
             });
             fetchData();
+            alert("Photo mise à jour !");
         } catch (err) {
             alert("Erreur lors du changement de photo");
         }
@@ -51,7 +57,8 @@ const Profile = () => {
     const handleSaveInfo = async () => {
         try {
             const payload = showOTPField ? { ...editData, otp: otp } : editData;
-            const res = await axios.patch('http://127.0.0.1:8000/api/profile/', payload, {
+            // تغيير PATCH إلى PUT هنا أيضاً
+            const res = await axios.put(`${API_BASE_URL}/api/profile/`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
@@ -72,7 +79,7 @@ const Profile = () => {
 
     const handlePasswordUpdate = async () => {
         try {
-            const res = await axios.post('http://127.0.0.1:8000/api/change-password/', passData, {
+            const res = await axios.post(`${API_BASE_URL}/api/change-password/`, passData, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             alert(res.data.detail);
@@ -84,6 +91,12 @@ const Profile = () => {
     };
 
     if (loading) return <div style={localStyles.loading}>Chargement...</div>;
+
+    // دالة مساعدة لعرض الصورة بشكل صحيح
+    const getAvatarSrc = () => {
+        if (!user?.photo) return null;
+        return user.photo.startsWith('http') ? user.photo : `${API_BASE_URL}${user.photo}`;
+    };
 
     return (
         <div style={localStyles.container}>
@@ -102,7 +115,7 @@ const Profile = () => {
                 <div style={localStyles.imageSection} onClick={() => fileInputRef.current.click()}>
                     <div style={localStyles.avatarWrapper}>
                         {user?.photo ? (
-                            <img src={`http://127.0.0.1:8000${user.photo}`} style={localStyles.avatar} alt="Profile" />
+                            <img src={getAvatarSrc()} style={localStyles.avatar} alt="Profile" />
                         ) : (
                             <div style={localStyles.largeDefaultAvatar}>{user?.username?.charAt(0).toUpperCase()}</div>
                         )}
@@ -227,6 +240,7 @@ const Profile = () => {
         </div>
     );
 };
+
 
 const localStyles = {
     container: { padding: '80px 20px', display: 'flex', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-main)' },
