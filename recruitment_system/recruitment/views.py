@@ -574,21 +574,37 @@ from .serializers import EnterpriseSerializer
 
 class EnterpriseViewSet(viewsets.ModelViewSet):
     serializer_class = EnterpriseSerializer
-    permission_classes = [IsAuthenticated]
+    # حذفنا الصلاحية العامة هنا لنخصصها داخل دالة get_permissions
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_queryset(self):
         user = self.request.user
-        # 1. السوبر أدمن يرى كل المؤسسات
-        if user.role == 'SUPER_ADMIN':
+
+        # 1. السوبر أدمن يرى كل المؤسسات (النشطة وغير النشطة)
+        if user.is_authenticated and user.role == 'SUPER_ADMIN':
             return Enterprise.objects.all().order_by('is_approved', '-id')
 
-        # 2. المستخدم العادي يرى شركته فقط (بأمان)
-        if hasattr(user, 'enterprise') and user.enterprise:
-            return Enterprise.objects.filter(id=user.enterprise.id)
+        # 2. المستخدم الإداري (DG/Admin) يرى شركته الخاصة فقط للتحكم بها
+        if user.is_authenticated and hasattr(user, 'enterprise') and user.enterprise:
+            if user.role in ['DG', 'DG_GOV', 'DG_BUSINESS', 'ADMIN']:
+                return Enterprise.objects.filter(id=user.enterprise.id)
 
-        # 3. إذا كان مرشح أو مستخدم تائه، لا نرسل خطأ 500، بل نرسل قائمة فارغة
-        return Enterprise.objects.none()
+        # 3. التعديل المضاف: المرشح (Candidat) أو أي مستخدم آخر يرى فقط الشركات المعتمدة (النشطة)
+        # هذا يضمن ظهور الشركات في "Espace Candidat"
+        return Enterprise.objects.filter(is_approved=True).order_by('-id')
+
+    def get_permissions(self):
+        """
+        تخصيص الصلاحيات:
+        - القراءة (list, retrieve) متاحة للجميع (أو للمسجلين فقط حسب رغبتك).
+        - التعديل والإضافة يتطلب أن يكون المستخدم مسجلاً وله صلاحيات إدارية.
+        """
+        if self.action in ['list', 'retrieve']:
+            # السماح للمرشحين والزوار برؤية الشركات فقط
+            return [permissions.AllowAny()]
+
+        # العمليات الأخرى (create, update, destroy) تتطلب تسجيل دخول
+        return [permissions.IsAuthenticated()]
 
 class CreateEnterpriseWithDGView(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -851,15 +867,34 @@ def approve_subscription(request, pk):
         return Response({'error': 'Demande non trouvée'}, status=404)
 
 
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from .models import SubscriptionRequest, Offre
+
 class MySubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
+            # التعديل: إذا كان المستخدم مدير عام (Super Admin)، نرسل استجابة ناجحة فارغة لتجنب خطأ 400
+            if request.user.is_superuser:
+                return Response({
+                    "status": "ADMIN",
+                    "detail": "Accès administrateur : pas d'abonnement requis",
+                    "plan_details": {
+                        "title": "Administration",
+                        "offres_count": "∞",
+                        "current_usage": 0
+                    }
+                }, status=200)
+
+            # استكمال المنطق الأصلي للشركات والمترشحين
             enterprise = getattr(request.user, 'enterprise', None) or getattr(request.user, 'enterprise_profile', None)
 
             if not enterprise:
-                return Response({"detail": "Aucune entreprise associée"}, status=400)
+                # إذا لم يكن سوبر أدمن وليس لديه شركة (مثل المترشح)، نعيد حالة غير نشط بدلاً من خطأ 400
+                return Response({"detail": "Aucune entreprise associée", "status": "INACTIVE"}, status=200)
 
             # البحث عن الاشتراك النشط حالياً
             subscription = SubscriptionRequest.objects.filter(

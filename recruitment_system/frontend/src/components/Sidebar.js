@@ -6,35 +6,42 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const token = localStorage.getItem('access');
-  const role = (localStorage.getItem('role') || "").toUpperCase().trim();
+  // جلب الرتبة مع ضمان وجود قيمة افتراضية لتجنب الأخطاء
+  const [role, setRole] = useState((localStorage.getItem('role') || "").toUpperCase().trim());
   const [userData, setUserData] = useState(null);
-  const [subscriptionInfo, setSubscriptionInfo] = useState(null); // حالة جديدة للاشتراك الدقيق
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  // --- التعديل: جلب الملف الشخصي وحالة الاشتراك الحقيقية ---
   useEffect(() => {
     if (token) {
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      // جلب بيانات البروفايل وحالة الاشتراك في وقت واحد لضمان المزامنة
-      Promise.all([
-        axios.get('http://127.0.0.1:8000/api/profile/', config),
-        axios.get('http://127.0.0.1:8000/api/my-subscription/', config)
-      ])
-      .then(([profileRes, subRes]) => {
-        setUserData(profileRes.data);
-        setSubscriptionInfo(subRes.data);
+      // 1. جلب بيانات البروفايل وتحديث الرتبة فوراً
+      axios.get('http://127.0.0.1:8000/api/profile/', config)
+        .then(res => {
+          setUserData(res.data);
 
-        // تحديث التخزين المحلي لضمان اطلاع بقية المكونات
-        const updatedUser = {
-          ...profileRes.data,
-          subscription: subRes.data
-        };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-      })
-      .catch(err => console.error("Erreur sync sidebar:", err));
+          // تحديث الرتبة في الحالة وفي التخزين المحلي لضمان ظهور الروابط الصحيحة
+          if (res.data.role) {
+            const newRole = res.data.role.toUpperCase().trim();
+            setRole(newRole);
+            localStorage.setItem('role', newRole);
+          }
+
+          const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+          localStorage.setItem('user', JSON.stringify({ ...currentUser, ...res.data }));
+        })
+        .catch(err => {
+          console.error("Erreur Profil:", err);
+          if (err.response && err.response.status === 401) handleLogout();
+        });
+
+      // 2. جلب بيانات الاشتراك (صارت آمنة الآن بفضل تعديل الـ Backend السابق)
+      axios.get('http://127.0.0.1:8000/api/my-subscription/', config)
+        .then(res => setSubscriptionInfo(res.data))
+        .catch(err => console.warn("Note: Subscription info not available."));
     }
-  }, [token, location.pathname]); // التحديث عند تغيير الصفحة لضمان الانعكاس الفوري لأي تغيير
+  }, [token, location.pathname]);
 
   if (location.pathname === '/login' || location.pathname === '/register' || !token || !role) {
     return null;
@@ -62,14 +69,23 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
     }
   };
 
-  const isSuperAdmin = role === 'SUPER_ADMIN';
+  // التحقق من الصلاحيات بناءً على الرتبة المحدثة
+  const isSuperAdmin = role === 'SUPER_ADMIN' || role === 'ADMIN_GENERAL';
   const isDG = ['DG', 'DIRECTEUR GÉNÉRAL', 'DG_BUSINESS', 'DG_GOV', 'PROPRIÉTAIRE D\'ENTREPRISE', 'HOMME D\'AFFAIRES'].includes(role);
   const isAgent = role === 'RESPONSABLE RH' || role === 'ADMIN';
   const isCandidat = role === 'CANDIDAT';
 
-  // --- التعديل: استخراج البيانات من اشتراك الـ API المباشر ---
   const currentPlanName = subscriptionInfo?.plan_details?.title || "Mode Gratuit";
-  const isPlanActive = subscriptionInfo?.status === 'ACTIVE';
+  const isPlanActive = subscriptionInfo?.status === 'ACTIVE' || role === 'SUPER_ADMIN';
+
+  const getAvatarSource = () => {
+    const photoPath = userData?.photo || userData?.profile_photo || userData?.image || userData?.avatar;
+    if (!photoPath) return null;
+    if (photoPath.startsWith('http')) return photoPath;
+    const cleanPath = photoPath.startsWith('/') ? photoPath : `/${photoPath}`;
+    const finalPath = cleanPath.includes('/media/') ? cleanPath : `/media${cleanPath}`;
+    return `http://127.0.0.1:8000${finalPath.replace('//', '/')}`;
+  };
 
   return (
     <>
@@ -94,21 +110,34 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
         <div onClick={() => navigate('/profile')} style={styles.userCard} title="Voir le profil">
           <div style={styles.avatarWrapper}>
-            {userData?.photo ? (
-              <img src={`http://127.0.0.1:8000${userData.photo}`} alt="P" style={styles.avatarImg} />
-            ) : (
-              <div style={styles.defaultAvatar}>{userData?.username?.charAt(0).toUpperCase()}</div>
-            )}
-            {/* عرض النقطة الخضراء فقط إذا كان الاشتراك ACTIVE فعلاً */}
-            {isDG && isPlanActive && <div style={styles.activeStatusDot} title="Compte Premium"></div>}
+            {getAvatarSource() ? (
+              <img
+                src={getAvatarSource()}
+                alt="Profile"
+                style={styles.avatarImg}
+                onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+
+            <div style={{
+                ...styles.defaultAvatar,
+                display: getAvatarSource() ? 'none' : 'flex'
+            }}>
+                {userData?.username?.charAt(0).toUpperCase() || "U"}
+            </div>
+
+            {isPlanActive && <div style={styles.activeStatusDot} title="Status Active"></div>}
           </div>
           <div style={styles.userInfo}>
             <div style={styles.userName}>{userData?.username || "Utilisateur"}</div>
-            {/* التعديل: عرض اسم الباقة بلون مختلف حسب الحالة */}
             <div style={{
                 ...styles.userRole,
                 color: isPlanActive ? '#10b981' : '#f59e0b',
-                fontWeight: isPlanActive ? 'bold' : 'normal'
+                fontWeight: 'bold'
             }}>
                 {isDG ? currentPlanName : role}
             </div>
@@ -187,11 +216,9 @@ const SidebarLink = ({ to, label, icon, active }) => (
 );
 
 const styles = {
-  // الأنماط كما هي في كودك الأصلي مع بقاء التعديلات الجمالية
   sidebar: {
     position: 'fixed', top: 0, left: 0, height: '100vh',
-    backgroundColor: 'var(--bg-sidebar)',
-    color: 'var(--text-main)',
+    backgroundColor: 'var(--bg-sidebar)', color: 'var(--text-main)',
     display: 'flex', flexDirection: 'column',
     transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)', zIndex: 1000, overflow: 'hidden',
     borderRight: '1px solid rgba(128, 128, 128, 0.1)'
@@ -203,15 +230,15 @@ const styles = {
   },
   brandContainer: { padding: '30px 25px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 },
   userCard: { margin: '0 15px 25px 15px', padding: '12px', backgroundColor: 'rgba(128,128,128,0.1)', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: '0.3s', flexShrink: 0 },
-  navContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 15px', scrollbarWidth: 'none', msOverflowStyle: 'none' },
+  navContainer: { flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 15px' },
   scrollArea: { display: 'flex', flexDirection: 'column', gap: '5px', paddingBottom: '20px' },
   logoBadge: { background: 'linear-gradient(135deg, #6366f1, #a855f7)', padding: '8px 12px', borderRadius: '12px', fontWeight: 'bold', color: '#fff' },
   brandName: { fontSize: '20px', fontWeight: '800', whiteSpace: 'nowrap', color: 'var(--text-main)' },
-  avatarWrapper: { position: 'relative' },
-  avatarImg: { width: '40px', height: '40px', borderRadius: '10px', objectFit: 'cover' },
+  avatarWrapper: { position: 'relative', width: '40px', height: '40px' },
+  avatarImg: { width: '40px', height: '40px', borderRadius: '10px', objectFit: 'cover', position: 'absolute', top: 0, left: 0, zIndex: 2 },
   activeStatusDot: {
     position: 'absolute', bottom: '-2px', right: '-2px', width: '12px', height: '12px',
-    backgroundColor: '#10b981', borderRadius: '50%', border: '2px solid var(--bg-sidebar)'
+    backgroundColor: '#10b981', borderRadius: '50%', border: '2px solid var(--bg-sidebar)', zIndex: 3
   },
   defaultAvatar: { width: '40px', height: '40px', borderRadius: '10px', backgroundColor: '#6366f1', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' },
   userName: { fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap', color: 'var(--text-main)' },

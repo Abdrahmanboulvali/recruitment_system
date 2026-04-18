@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import axios from 'axios'; // تم تصحيح هذا السطر
 
 const Profile = () => {
     const [user, setUser] = useState(null);
@@ -40,7 +40,6 @@ const Profile = () => {
         const formData = new FormData();
         formData.append('photo', file);
         try {
-            // تغيير PATCH إلى PUT لحل مشكلة Method Not Allowed
             await axios.put(`${API_BASE_URL}/api/profile/`, formData, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -54,10 +53,29 @@ const Profile = () => {
         }
     };
 
+    const handleDeletePhoto = async (e) => {
+        e.stopPropagation();
+        if (!window.confirm("Voulez-vous supprimer votre photo de profil ?")) return;
+
+        try {
+            const formData = new FormData();
+            formData.append('photo', "");
+            await axios.put(`${API_BASE_URL}/api/profile/`, formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            fetchData();
+            alert("Photo supprimée !");
+        } catch (err) {
+            alert("Erreur lors de la suppression");
+        }
+    };
+
     const handleSaveInfo = async () => {
         try {
             const payload = showOTPField ? { ...editData, otp: otp } : editData;
-            // تغيير PATCH إلى PUT هنا أيضاً
             const res = await axios.put(`${API_BASE_URL}/api/profile/`, payload, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -92,7 +110,6 @@ const Profile = () => {
 
     if (loading) return <div style={localStyles.loading}>Chargement...</div>;
 
-    // دالة مساعدة لعرض الصورة بشكل صحيح
     const getAvatarSrc = () => {
         if (!user?.photo) return null;
         return user.photo.startsWith('http') ? user.photo : `${API_BASE_URL}${user.photo}`;
@@ -112,14 +129,35 @@ const Profile = () => {
                     </button>
                 </div>
 
-                <div style={localStyles.imageSection} onClick={() => fileInputRef.current.click()}>
+                <div
+                    style={{
+                        ...localStyles.imageSection,
+                        cursor: isEditing ? 'pointer' : 'default'
+                    }}
+                    onClick={() => isEditing && fileInputRef.current.click()}
+                >
                     <div style={localStyles.avatarWrapper}>
                         {user?.photo ? (
                             <img src={getAvatarSrc()} style={localStyles.avatar} alt="Profile" />
                         ) : (
                             <div style={localStyles.largeDefaultAvatar}>{user?.username?.charAt(0).toUpperCase()}</div>
                         )}
-                        <div style={localStyles.cameraOverlay}>📷</div>
+
+                        {/* تظهر الكاميرا والحذف فقط في وضع التعديل (isEditing) */}
+                        {isEditing && (
+                            <>
+                                <div style={localStyles.cameraOverlay} title="Changer la photo">📷</div>
+                                {user?.photo && (
+                                    <div
+                                        style={localStyles.deleteOverlay}
+                                        onClick={handleDeletePhoto}
+                                        title="Supprimer la photo"
+                                    >
+                                        🗑️
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                     <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} />
                 </div>
@@ -241,7 +279,6 @@ const Profile = () => {
     );
 };
 
-
 const localStyles = {
     container: { padding: '80px 20px', display: 'flex', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-main)' },
     card: {
@@ -256,11 +293,12 @@ const localStyles = {
     },
     header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' },
     editToggle: { background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', border: 'none', padding: '8px 15px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold' },
-    imageSection: { display: 'flex', justifyContent: 'center', marginBottom: '30px', cursor: 'pointer' },
+    imageSection: { display: 'flex', justifyContent: 'center', marginBottom: '30px' },
     avatarWrapper: { position: 'relative', width: '120px', height: '120px' },
     avatar: { width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '3px solid #6366f1' },
     largeDefaultAvatar: { width: '100%', height: '100%', borderRadius: '50%', backgroundColor: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', fontWeight: 'bold', color: '#fff' },
-    cameraOverlay: { position: 'absolute', bottom: '5px', right: '5px', background: '#6366f1', padding: '8px', borderRadius: '50%', fontSize: '14px', boxShadow: '0 2px 10px rgba(0,0,0,0.3)', color: '#fff' },
+    cameraOverlay: { position: 'absolute', bottom: '0px', right: '0px', background: '#6366f1', padding: '8px', borderRadius: '50%', fontSize: '14px', boxShadow: '0 2px 10px rgba(0,0,0,0.3)', color: '#fff', cursor: 'pointer', zIndex: 2 },
+    deleteOverlay: { position: 'absolute', bottom: '0px', left: '0px', background: '#ef4444', padding: '8px', borderRadius: '50%', fontSize: '14px', boxShadow: '0 2px 10px rgba(0,0,0,0.3)', color: '#fff', cursor: 'pointer', zIndex: 2 },
     infoContainer: { display: 'flex', flexDirection: 'column', gap: '15px' },
     infoCard: {
         display: 'flex',

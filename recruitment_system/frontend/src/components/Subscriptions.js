@@ -194,7 +194,7 @@ const Subscriptions = () => {
                                 <input type="file" accept="image/*" onChange={(e) => setReceipt(e.target.files[0])} style={styles.hiddenInput} id="file-upload" required />
                                 <label htmlFor="file-upload" style={styles.fileLabel}>
                                     <FiUpload size={30} style={{marginBottom: '10px'}} />
-                                    {receipt ? <strong>{receipt.name}</strong> : "Cliquez لتنزيل صورة الوصل"}
+                                    {receipt ? <strong>{receipt.name}</strong> : "Cliquez pour télécharger l'image du reçu"}
                                 </label>
                             </div>
                             <button type="submit" disabled={isSubmitting} style={styles.confirmBtn}>
