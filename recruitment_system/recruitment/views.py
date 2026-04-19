@@ -25,7 +25,15 @@ from .serializers import (
     UserSerializer, AgentCreateSerializer, EnterpriseSerializer,
     RegisterSerializer  # Add this one
 )
-from .permissions import IsResponsableRHOrAdmin, IsResponsableRH
+from .permissions import IsResponsableRHOrAdmin, IsResponsableRH, IsCanPostOffre
+
+# استبدل تحميل الـ PKL بهذا:
+from sentence_transformers import SentenceTransformer, util
+import torch
+
+# تحميل الموديل (سيتم تحميله مرة واحدة عند تشغيل السيرفر)
+# هذا الموديل يدعم 50+ لغة وهو مثالي لمشروعك
+EVALUATOR_MODEL = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
 # --- Configurations ---
 genai.configure(api_key="YOUR_GEMINI_API_KEY")
@@ -375,7 +383,7 @@ class OffreViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [AllowAny()]
-        return [IsAuthenticated(), IsResponsableRHOrAdmin()]
+        return [IsAuthenticated(), IsCanPostOffre()]
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -447,6 +455,8 @@ def detect_domain(text):
 
 
 # --- الـ Class المعدل ---
+
+
 class CandidatureViewSet(viewsets.ModelViewSet):
     serializer_class = CandidatureSerializer
 
@@ -457,74 +467,61 @@ class CandidatureViewSet(viewsets.ModelViewSet):
         return Candidature.objects.filter(offre__enterprise=user.enterprise)
 
     def create(self, request, *args, **kwargs):
+        # 1. تنفيذ عملية الحفظ الأساسية للطلب
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         candidature = serializer.save()
 
-        if KB_ONET is not None and candidature.cv_file:
+        # 2. البدء في عملية التقييم الذكي إذا وجد ملف CV
+        if candidature.cv_file:
             try:
-                # 1. استخراج ومعالجة النص
+                # أ. استخراج النص من الـ PDF (دعم كامل لجميع اللغات)
                 with pdfplumber.open(candidature.cv_file.path) as pdf:
-                    cv_raw = " ".join([p.extract_text() or "" for p in pdf.pages])
+                    cv_text = " ".join([p.extract_text() or "" for p in pdf.pages])
 
-                cv_en = GoogleTranslator(source='auto', target='en').translate(cv_raw[:4000])
-                cv_final = clean_text(cv_en)
+                # ب. جلب متطلبات الوظيفة (العنوان + الوصف) لزيادة دقة المقارنة
+                job_requirements = f"{candidature.offre.titre} {candidature.offre.description}"
 
-                # 2. فحص تخصص المجال (Domain Check)
-                original_title = candidature.offre.titre
-                cv_domain = detect_domain(cv_final)
-                job_domain = detect_domain(original_title)
+                if cv_text.strip() and job_requirements.strip():
+                    # ج. تحويل النصوص إلى Vector Embeddings (تمثيل دلالي للمعنى)
+                    # الموديل سيفهم أن "Developpeur" تعني "برمج" تلقائياً
+                    embeddings = EVALUATOR_MODEL.encode([cv_text, job_requirements], convert_to_tensor=True)
 
-                if cv_domain != job_domain and job_domain != "general" and cv_domain != "general":
-                    candidature.score = 0
-                    candidature.commentaire_ia = "Aucune pertinence : Le domaine professionnel ne correspond pas à l'offre."
-                    candidature.save()
-                    return Response(self.get_serializer(candidature).data, status=201)
+                    # د. حساب تشابه الكوساين (Cosine Similarity)
+                    cosine_score = util.cos_sim(embeddings[0], embeddings[1])
 
-                # 3. البحث عن الملف الوظيفي في O*NET
-                mask = KB_ONET['Alternate Title'].str.contains(original_title, case=False, na=False)
-                job_profile = KB_ONET[mask]
+                    # هـ. معالجة السكور ليكون نسبة مئوية (0-100)
+                    # نستخدم معادلة بسيطة لضبط النتائج لتكون أكثر واقعية للمستخدم البشري
+                    raw_score = float(cosine_score[0][0]) * 100
 
-                if job_profile.empty:
-                    keywords = original_title.replace('-', ' ').split()
-                    for word in keywords:
-                        if len(word) > 3:
-                            mask = KB_ONET['Alternate Title'].str.contains(word, case=False, na=False)
-                            job_profile = KB_ONET[mask]
-                            if not job_profile.empty: break
+                    # تحسين النتيجة: رفع السكور قليلاً إذا كان إيجابياً ليعكس الواقع المهني
+                    final_score = round(min(max(raw_score + 5, 0), 99), 2)
+                    candidature.score = final_score
 
-                # 4. حساب النتيجة والصياغة النهائية
-                if not job_profile.empty:
-                    target_text = clean_text(" ".join(job_profile['full_profile'].astype(str)))
-                    vectorizer = TfidfVectorizer(ngram_range=(1, 2))
-                    vectors = vectorizer.fit_transform([cv_final, target_text])
-                    raw_score = cosine_similarity(vectors[0:1], vectors[1:2])[0][0]
-
-                    # تحسين السكور (Scaling)
-                    final_score = np.sqrt(raw_score) * 100
-                    candidature.score = int(min(final_score + 5, 99)) if final_score > 10 else int(final_score)
-
-                    # اختيار التعبير الإداري المناسب للمدير
-                    if final_score >= 75:
-                        candidature.commentaire_ia = "Profil hautement qualifié : Excellente adéquation avec les exigences du poste."
-                    elif final_score >= 50:
-                        candidature.commentaire_ia = "Profil pertinent : Bonne correspondance globale avec le poste."
-                    elif final_score >= 25:
-                        candidature.commentaire_ia = "Profil moyennement adapté : Des lacunes techniques sont à prévoir."
+                    # و. توليد تعليق الإدارة (Commentaire IA) بناءً على النتيجة الدلالية
+                    if final_score >= 80:
+                        candidature.commentaire_ia = "Excellent match : Le profil possède les compétences clés recherchées."
+                    elif final_score >= 60:
+                        candidature.commentaire_ia = "Bon match : Le profil est pertinent pour ce poste."
+                    elif final_score >= 40:
+                        candidature.commentaire_ia = "Match moyen : Quelques compétences correspondent، des lacunes existent."
                     else:
-                        candidature.commentaire_ia = "Profil peu pertinent : Faible correspondance avec les compétences requises."
+                        candidature.commentaire_ia = "Faible correspondance : Le profil ne correspond pas aux attentes."
                 else:
-                    candidature.score = 10 if cv_raw.strip() else 0
-                    candidature.commentaire_ia = "Candidature générique : Manque de détails techniques spécifiques."
+                    candidature.score = 0
+                    candidature.commentaire_ia = "Analyse impossible : Document vide ou illisible."
 
+                # 3. حفظ التعديلات النهائية في قاعدة البيانات
                 candidature.save()
+
             except Exception as e:
-                print(f"IA Error: {e}")
-                candidature.score = 5
-                candidature.commentaire_ia = "Erreur d'analyse : Impossible d'évaluer la pertinence technique du document."
+                # في حالة حدوث أي خطأ تقني، نضع سكور منخفض ونحفظ الخطأ للمراجعة
+                print(f"DL Analysis Error: {e}")
+                candidature.score = 0
+                candidature.commentaire_ia = "Erreur technique lors de l'évaluation du CV."
                 candidature.save()
 
-        return Response(self.get_serializer(candidature).data, status=201)
+        return Response(self.get_serializer(candidature).data, status=status.HTTP_201_CREATED)
 
 # --- Stats & Dashboards ---
 

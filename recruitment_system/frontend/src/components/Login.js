@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
+import { FiArrowLeft } from 'react-icons/fi'; // استيراد أيقونة العودة
 import '../App.css';
 
 const Login = () => {
@@ -24,18 +25,16 @@ const Login = () => {
 
             const rawRole = userRes.data.role.toUpperCase();
 
-            // --- المنطق الجديد: تخزين البيانات الإضافية ---
             localStorage.setItem('role', rawRole);
             localStorage.setItem('enterprise_id', userRes.data.enterprise_id || '');
             localStorage.setItem('enterprise_name', userRes.data.enterprise || '');
             localStorage.setItem('username', userRes.data.username || '');
 
-            // --- التوجيه المحدث ليشمل SUPER_ADMIN ---
             if (rawRole === 'SUPER_ADMIN') {
-                navigate('/AllStats'); // المسار الجديد لإدارة الشركات
+                navigate('/AllStats');
             } else if (rawRole === 'CANDIDAT') {
                 navigate('/espace-candidat');
-            } else if (rawRole === 'DG' || rawRole === 'DIRECTEUR GÉNÉRAL' || rawRole === 'DG_BUSINESS') {
+            } else if (rawRole === 'DG' || rawRole === 'DIRECTEUR GÉNÉRAL' || rawRole === 'DG_BUSINESS' || rawRole === 'DG_GOV' || rawRole === 'DG_COMPANY') {
                 navigate('/dashboard');
             } else {
                 navigate('/manage-offres');
@@ -69,8 +68,22 @@ const Login = () => {
                 ...styles.glassCard,
                 backgroundColor: theme.cardBg,
                 color: theme.text,
-                animation: 'fadeInUp 0.6s ease-out'
+                animation: 'fadeInUp 0.6s ease-out',
+                position: 'relative' // لضمان تموضع زر العودة بدقة
             }}>
+                {/* زر العودة الجديد */}
+                <button
+                    onClick={() => navigate('/')}
+                    style={{
+                        ...styles.backBtn,
+                        color: theme.text,
+                        backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                    }}
+                    title="Retour à l'accueil"
+                >
+                    <FiArrowLeft size={20} />
+                </button>
+
                 <div style={styles.headerSection}>
                     <h2 style={styles.title}>Connexion</h2>
                     <p style={{color: isDarkMode ? 'var(--text-muted)' : '#64748b', fontSize: '14px'}}>
@@ -131,6 +144,13 @@ const styles = {
         padding: '12px 24px', borderRadius: '30px', border: 'none',
         cursor: 'pointer', backgroundColor: '#6366f1', color: 'white',
         fontWeight: 'bold', boxShadow: '0 10px 15px rgba(0,0,0,0.2)', zIndex: 10000
+    },
+    backBtn: {
+        position: 'absolute', top: '20px', left: '20px',
+        width: '40px', height: '40px', borderRadius: '12px',
+        border: 'none', cursor: 'pointer', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        transition: '0.3s ease'
     },
     glassCard: {
         backdropFilter: 'blur(16px) saturate(180%)',
