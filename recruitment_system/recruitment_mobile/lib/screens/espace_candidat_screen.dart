@@ -1,26 +1,27 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api_config.dart';
+import '../main.dart';
 
-class EspaceCandidatScreen extends StatefulWidget {
-  const EspaceCandidatScreen({super.key});
+class EspaceCandidat extends StatefulWidget {
+  const EspaceCandidat({super.key});
 
   @override
-  State<EspaceCandidatScreen> createState() => _EspaceCandidatScreenState();
+  State<EspaceCandidat> createState() => _EspaceCandidatState();
 }
 
-class _EspaceCandidatScreenState extends State<EspaceCandidatScreen> {
+class _EspaceCandidatState extends State<EspaceCandidat> {
   final _storage = const FlutterSecureStorage();
   List offres = [];
   List entreprises = [];
-  bool isLoading = true;
-  String activeTab = 'OFFRES'; // 'OFFRES' أو 'ENTREPRISES'
-  String searchTerm = "";
-  String selectedSpecialty = "Tous";
-  bool isLoggedIn = false;
+  bool _isLoading = true;
+  bool _isLoggedIn = false;
+  bool _isDarkMode = true;
+  String _selectedTab = 'OFFRES';
+  String _searchTerm = "";
+  String _selectedSpecialty = "Tous";
 
   final List<String> specialties = [
     "Tous", "Data Science", "Full Stack", "Data Analyst",
@@ -30,183 +31,207 @@ class _EspaceCandidatScreenState extends State<EspaceCandidatScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuthAndFetch();
+    _initialSetup();
   }
 
-  Future<void> _checkAuthAndFetch() async {
+  Future<void> _initialSetup() async {
+    String? savedMode = await _storage.read(key: 'isDarkMode');
+    if (savedMode != null) setState(() => _isDarkMode = savedMode == 'true');
+
     String? token = await _storage.read(key: 'access');
-    setState(() => isLoggedIn = token != null);
-    await _fetchData();
+    setState(() => _isLoggedIn = token != null);
+
+    _fetchData();
   }
 
   Future<void> _fetchData() async {
-    setState(() => isLoading = true);
-    String? token = await _storage.read(key: 'access');
-    Map<String, String> headers = token != null ? {'Authorization': 'Bearer $token'} : {};
-
     try {
-      final results = await Future.wait([
+      String? token = await _storage.read(key: 'access');
+      Map<String, String> headers = token != null ? {'Authorization': 'Bearer $token'} : {};
+
+      final responses = await Future.wait([
         http.get(Uri.parse('${ApiConfig.baseUrl}/api/offres/'), headers: headers),
         http.get(Uri.parse('${ApiConfig.baseUrl}/api/enterprises/'), headers: headers),
       ]);
 
-      if (results[0].statusCode == 200) {
-        var data = json.decode(utf8.decode(results[0].bodyBytes));
-        offres = data is List ? data : (data['results'] ?? []);
-      }
-      if (results[1].statusCode == 200) {
-        var data = json.decode(utf8.decode(results[1].bodyBytes));
-        entreprises = data is List ? data : (data['results'] ?? []);
-      }
+      setState(() {
+        offres = json.decode(utf8.decode(responses[0].bodyBytes));
+        entreprises = json.decode(utf8.decode(responses[1].bodyBytes));
+        _isLoading = false;
+      });
     } catch (e) {
-      debugPrint("Fetch error: $e");
-    } finally {
-      setState(() => isLoading = false);
+      debugPrint("Error fetching data: $e");
+      setState(() => _isLoading = false);
     }
   }
 
-  List get filteredOffres {
-    // تم استخدام .where بدلاً من .filter لأنها الدالة القياسية في Dart
-    return offres.where((o) {
-      final title = o['titre'].toString().toLowerCase();
-      final matchesSearch = title.contains(searchTerm.toLowerCase());
-      if (selectedSpecialty == "Tous") return matchesSearch;
-      return matchesSearch && title.contains(selectedSpecialty.toLowerCase());
-    }).toList();
+  // تم تعديل الدالة لضمان الانتقال الصحيح وتحديث الحالة عند العودة
+  void _handleApply(int offreId) {
+    if (_isLoggedIn) {
+      Navigator.pushNamed(
+        context,
+        '/postuler',
+        arguments: offreId
+      );
+    } else {
+      Navigator.pushNamed(context, '/login').then((_) {
+        _initialSetup(); // تحديث حالة الدخول فور العودة من صفحة Login
+      });
+    }
+  }
+
+  Future<void> _toggleTheme() async {
+    MyApp.of(context).toggleTheme();
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    _isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    final bgColor = _isDarkMode ? ApiConfig.kBgMain : const Color(0xFFF1F5F9);
+    final cardColor = _isDarkMode ? ApiConfig.kBgCard : Colors.white;
+    final textColor = _isDarkMode ? Colors.white : const Color(0xFF0F172A);
+
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // Header Section
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Portail", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                            Text("Trouvez votre carrière idéale", style: TextStyle(color: Colors.grey, fontSize: 14)),
-                          ],
-                        ),
-                        if (!isLoggedIn)
-                          ElevatedButton(
-                            onPressed: () => Navigator.pushNamed(context, '/login'),
-                            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary),
-                            child: const Text("Connexion"),
-                          )
-                      ],
-                    ),
-                    const SizedBox(height: 25),
-                    _buildSearchBar(),
-                    const SizedBox(height: 15),
-                    _buildSpecialtiesFilter(),
-                  ],
-                ),
+      backgroundColor: bgColor,
+      drawer: _isLoggedIn ? const AppDrawer() : null,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: _isLoggedIn
+          ? Builder(
+              builder: (context) => IconButton(
+                icon: Icon(Icons.menu_rounded, color: textColor),
+                onPressed: () => Scaffold.of(context).openDrawer(),
               ),
-            ),
-
-            // Tabs Selector
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _StickyTabBarDelegate(
-                child: Container(
-                  color: ApiConfig.kBgMain,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: Row(
-                    children: [
-                      _tabButton("OFFRES", Icons.work_outline),
-                      const SizedBox(width: 10),
-                      _tabButton("ENTREPRISES", Icons.business_outlined),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Content Grid
-            isLoading
-                ? const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-                : SliverPadding(
-                    padding: const EdgeInsets.all(20),
-                    sliver: activeTab == 'OFFRES' ? _buildOffresGrid() : _buildEntreprisesGrid(),
-                  ),
+            )
+          : Icon(Icons.hub_outlined, color: ApiConfig.kPrimary, size: 28),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Portail de Recrutement",
+                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+            Text("Plateforme intelligente",
+                style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 11)),
           ],
         ),
+        actions: [
+          if (!_isLoggedIn) ...[
+            IconButton(
+              icon: Icon(_isDarkMode ? Icons.wb_sunny : Icons.nightlight_round, color: Colors.orange, size: 20),
+              onPressed: _toggleTheme,
+            ),
+            TextButton(
+              onPressed: () => Navigator.pushNamed(context, '/login'),
+              child: const Text("Login", style: TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 10, top: 8, bottom: 8),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ApiConfig.kPrimary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                ),
+                onPressed: () => Navigator.pushNamed(context, '/register'),
+                child: const Text("Sign Up", style: TextStyle(color: Colors.white, fontSize: 12)),
+              ),
+            ),
+          ]
+        ],
       ),
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Column(
+            children: [
+              _buildSearchBar(textColor, cardColor),
+              _buildSpecialties(textColor),
+              _buildTabs(textColor, cardColor),
+              Expanded(
+                child: _selectedTab == 'OFFRES'
+                  ? _buildOffresList(textColor, cardColor)
+                  : _buildEntreprisesGrid(textColor, cardColor),
+              ),
+            ],
+          ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
-      ),
+  Widget _buildSearchBar(Color textColor, Color cardColor) {
+    return Padding(
+      padding: const EdgeInsets.all(15),
       child: TextField(
-        onChanged: (v) => setState(() => searchTerm = v),
-        style: const TextStyle(color: Colors.white),
-        decoration: const InputDecoration(
-          icon: Icon(Icons.search, color: Colors.grey),
-          hintText: "Rechercher un emploi...",
-          hintStyle: TextStyle(color: Colors.white30),
-          border: InputBorder.none,
+        onChanged: (v) => setState(() => _searchTerm = v),
+        style: TextStyle(color: textColor),
+        decoration: InputDecoration(
+          hintText: "Rechercher...",
+          hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
+          prefixIcon: Icon(Icons.search, color: textColor.withOpacity(0.5)),
+          filled: true,
+          fillColor: cardColor,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
         ),
       ),
     );
   }
 
-  Widget _buildSpecialtiesFilter() {
+  Widget _buildSpecialties(Color textColor) {
     return SizedBox(
-      height: 40,
-      child: ListView.separated(
+      height: 50,
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: specialties.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         itemBuilder: (context, i) {
-          bool isSelected = selectedSpecialty == specialties[i];
-          return ChoiceChip(
-            label: Text(specialties[i]),
-            selected: isSelected,
-            onSelected: (v) => setState(() => selectedSpecialty = specialties[i]),
-            selectedColor: ApiConfig.kPrimary,
-            backgroundColor: ApiConfig.kBgCard,
-            labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: FontWeight.bold),
+          bool isSelected = _selectedSpecialty == specialties[i];
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: ChoiceChip(
+              label: Text(specialties[i]),
+              selected: isSelected,
+              onSelected: (v) => setState(() => _selectedSpecialty = specialties[i]),
+              selectedColor: ApiConfig.kPrimary,
+              labelStyle: TextStyle(color: isSelected ? Colors.white : textColor),
+              backgroundColor: Colors.transparent,
+            ),
           );
         },
       ),
     );
   }
 
-  Widget _tabButton(String label, IconData icon) {
-    bool isActive = activeTab == label;
+  Widget _buildTabs(Color textColor, Color cardColor) {
+    return Padding(
+      padding: const EdgeInsets.all(15),
+      child: Row(
+        children: [
+          _tabBtn("OFFRES", Icons.work, cardColor, textColor),
+          const SizedBox(width: 10),
+          _tabBtn("ENTREPRISES", Icons.business, cardColor, textColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabBtn(String label, IconData icon, Color cardColor, Color textColor) {
+    bool isSelected = _selectedTab == label;
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => activeTab = label),
+        onTap: () => setState(() => _selectedTab = label),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isActive ? ApiConfig.kPrimary : ApiConfig.kBgCard,
+            color: isSelected ? ApiConfig.kPrimary : cardColor,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 18),
+              Icon(icon, color: isSelected ? Colors.white : textColor, size: 18),
               const SizedBox(width: 8),
-              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(label, style: TextStyle(color: isSelected ? Colors.white : textColor, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -214,113 +239,94 @@ class _EspaceCandidatScreenState extends State<EspaceCandidatScreen> {
     );
   }
 
-  Widget _buildOffresGrid() {
-    final list = filteredOffres;
-    return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, i) {
-          final o = list[i];
-          return Container(
-            margin: const EdgeInsets.only(bottom: 15),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: ApiConfig.kBgCard,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("RECRUTEMENT", style: TextStyle(color: ApiConfig.kPrimary, fontSize: 10, fontWeight: FontWeight.bold)),
-                    if (o['date_expiration'] != null)
-                      const Icon(Icons.access_time, color: Colors.green, size: 14),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(o['titre'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("🏢 ${o['enterprise_name']}", style: const TextStyle(color: ApiConfig.kPrimary, fontSize: 13)),
-                const SizedBox(height: 15),
-                Text(o['description'] ?? "", maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => _handleApply(o['id']),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isLoggedIn ? Colors.green : ApiConfig.kPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(isLoggedIn ? "Postuler" : "Se connecter pour postuler"),
+  Widget _buildOffresList(Color textColor, Color cardColor) {
+    var filtered = offres.where((o) {
+      bool matchesSearch = o['titre'].toString().toLowerCase().contains(_searchTerm.toLowerCase());
+      if (_selectedSpecialty == "Tous") return matchesSearch;
+      return matchesSearch && o['titre'].toString().toLowerCase().contains(_selectedSpecialty.toLowerCase());
+    }).toList();
+
+    return ListView.builder(
+      itemCount: filtered.length,
+      padding: const EdgeInsets.all(15),
+      itemBuilder: (context, i) {
+        var o = filtered[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 15),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: textColor.withOpacity(0.05)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(o['titre'], style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 5),
+              Text("🏢 ${o['enterprise_name']}", style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 15),
+              Text(o['description'], maxLines: 2, style: TextStyle(color: textColor.withOpacity(0.7))),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    // تم تعديل اللون ليكون مطابقاً للويب (أخضر عند تسجيل الدخول)
+                    backgroundColor: _isLoggedIn ? const Color(0xFF16A34A) : ApiConfig.kPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                )
-              ],
-            ),
-          );
-        },
-        childCount: list.length, // تم التغيير إلى childCount
-      ),
-    );
-  }
-
-  Widget _buildEntreprisesGrid() {
-    return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 15,
-        crossAxisSpacing: 15,
-        childAspectRatio: 0.8,
-      ),
-      delegate: SliverChildBuilderDelegate(
-        (context, i) {
-          final ent = entreprises[i];
-          return Container(
-            decoration: BoxDecoration(color: ApiConfig.kBgCard, borderRadius: BorderRadius.circular(20)),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 35,
-                  backgroundColor: ApiConfig.kBgMain,
-                  child: Text(ent['nom']?[0] ?? "E", style: const TextStyle(fontSize: 24, color: ApiConfig.kPrimary)),
+                  onPressed: () => _handleApply(o['id']),
+                  child: Text(
+                    _isLoggedIn ? "Postuler maintenant" : "Connectez-vous pour postuler",
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+                  ),
                 ),
-                const SizedBox(height: 15),
-                Text(ent['nom'] ?? "", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                TextButton(onPressed: () {}, child: const Text("Voir Profil"))
-              ],
-            ),
-          );
-        },
-        childCount: entreprises.length, // تم التغيير إلى childCount
-      ),
+              )
+            ],
+          ),
+        );
+      },
     );
   }
 
-  void _handleApply(int id) {
-    if (isLoggedIn) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fonctionnalité de candidature bientôt disponible")));
-    } else {
-      Navigator.pushNamed(context, '/login');
-    }
+  Widget _buildEntreprisesGrid(Color textColor, Color cardColor) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(15),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 0.8),
+      itemCount: entreprises.length,
+      itemBuilder: (context, i) {
+        var e = entreprises[i];
+        return Container(
+          decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                radius: 35,
+                backgroundColor: ApiConfig.kPrimary.withOpacity(0.1),
+                child: Text(e['nom'].toString().isNotEmpty ? e['nom'][0] : "E", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 15),
+              Text(e['nom'] ?? "Entreprise", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: () {
+                  // الانتقال لصفحة الشركة مع تمرير المعرف (نفس منطق الويب)
+                  Navigator.pushNamed(
+                    context,
+                    '/profile-entreprise',
+                    arguments: {'id': e['id']}
+                  );
+                },
+                child: const Text("Profil"),
+              )
+            ],
+          ),
+        );
+      },
+    );
   }
-}
-
-class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final Widget child;
-  _StickyTabBarDelegate({required this.child});
-  @override
-  double get minExtent => 70;
-  @override
-  double get maxExtent => 70;
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => child;
-  @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) => true;
-}
-
-extension ListFilter on List {
-  Iterable filter(bool Function(dynamic) test) => where(test);
 }

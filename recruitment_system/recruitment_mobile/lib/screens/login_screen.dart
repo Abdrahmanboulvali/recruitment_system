@@ -20,20 +20,42 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String _error = '';
 
-  // مصفوفة الأدوار الإدارية (مطابقة تماماً لمنطق React الخاص بك)
+  @override
+  void initState() {
+    super.initState();
+    _loadTheme();
+  }
+
+  Future<void> _loadTheme() async {
+    String? savedMode = await _storage.read(key: 'isDarkMode');
+    if (savedMode != null) {
+      setState(() {
+        _isDarkMode = savedMode == 'true';
+      });
+    }
+  }
+
+  Future<void> _toggleTheme() async {
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+    });
+    await _storage.write(key: 'isDarkMode', value: _isDarkMode.toString());
+  }
+
   final List<String> dgRoles = [
     'DG',
     'DIRECTEUR GÉNÉRAL',
     'DG_BUSINESS',
     'DG_GOV',
-    'DG_COMPANY'
+    'DG_COMPANY',
+    'HOMME D\'AFFAIRES',
+    'PROPRIÉTAIRE D\'ENTREPRISE'
   ];
 
   Future<void> _handleSubmit() async {
     setState(() { _isLoading = true; _error = ''; });
 
     try {
-      // ملاحظة: إذا لم يعمل 127.0.0.1 على المحاكي، استبدله بـ 10.0.2.2
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/auth/jwt/create/'),
         body: {
@@ -48,23 +70,26 @@ class _LoginScreenState extends State<LoginScreen> {
         await _storage.write(key: 'access', value: accessToken);
 
         final userRes = await http.get(
-          Uri.parse('${ApiConfig.baseUrl}/api/user-info/'),
+          Uri.parse('${ApiConfig.baseUrl}/api/profile/'),
           headers: {'Authorization': 'Bearer $accessToken'},
         );
 
         if (userRes.statusCode == 200) {
-          final userData = json.decode(userRes.body);
-          final String rawRole = userData['role'].toString().toUpperCase();
+          final userData = json.decode(utf8.decode(userRes.bodyBytes));
+          final String rawRole = userData['role'].toString().toUpperCase().trim();
 
-          // تخزين البيانات (مطابقة لـ localStorage في الويب)
           await _storage.write(key: 'role', value: rawRole);
-          await _storage.write(key: 'enterprise_id', value: userData['enterprise_id']?.toString() ?? '');
-          await _storage.write(key: 'enterprise_name', value: userData['enterprise'] ?? '');
           await _storage.write(key: 'username', value: userData['username'] ?? '');
+
+          // حفظ معرف الشركة لربط المدير بشركته كما في الويب
+          if (userData['enterprise'] != null) {
+            await _storage.write(key: 'enterprise_id', value: userData['enterprise'].toString());
+          } else {
+            await _storage.delete(key: 'enterprise_id');
+          }
 
           if (!mounted) return;
 
-          // --- منطق التوجيه المتوافق مع الويب ---
           if (rawRole == 'SUPER_ADMIN') {
             Navigator.pushReplacementNamed(context, '/all-stats');
           } else if (rawRole == 'CANDIDAT') {
@@ -99,9 +124,17 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           Positioned(
             top: 40,
+            left: 20,
+            child: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new, color: textColor),
+              onPressed: () => Navigator.pushReplacementNamed(context, '/espace-candidat'),
+            ),
+          ),
+          Positioned(
+            top: 40,
             right: 20,
             child: ElevatedButton(
-              onPressed: () => setState(() => _isDarkMode = !_isDarkMode),
+              onPressed: _toggleTheme,
               style: ElevatedButton.styleFrom(
                 backgroundColor: ApiConfig.kPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),

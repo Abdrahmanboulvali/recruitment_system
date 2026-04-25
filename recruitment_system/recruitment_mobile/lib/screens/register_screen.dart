@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // أضف هذا
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api_config.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -14,7 +14,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _storage = const FlutterSecureStorage(); // تعريف التخزين
+  final _storage = const FlutterSecureStorage();
   bool _isLoading = false;
   bool _isDarkMode = true;
 
@@ -29,18 +29,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void initState() {
     super.initState();
-    _loadThemeMode(); // جلب الوضع عند تشغيل الصفحة
+    _loadThemeMode();
   }
 
-  // دالة لجلب الوضع من التخزين
   Future<void> _loadThemeMode() async {
     String? mode = await _storage.read(key: 'isDarkMode');
     if (mode != null) {
-      setState(() => _isDarkMode = mode == 'true');
+      if (mounted) {
+        setState(() => _isDarkMode = mode == 'true');
+      }
     }
   }
 
-  // دالة لتغيير الوضع وحفظه
   Future<void> _toggleTheme() async {
     setState(() => _isDarkMode = !_isDarkMode);
     await _storage.write(key: 'isDarkMode', value: _isDarkMode.toString());
@@ -125,11 +125,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: bgColor,
       body: Stack(
         children: [
+          // إضافة سهم العودة إلى فضاء المترشح
+          Positioned(
+            top: 40,
+            left: 20,
+            child: IconButton(
+              icon: Icon(Icons.arrow_back_ios_new, color: textColor),
+              onPressed: () => Navigator.pushReplacementNamed(context, '/espace-candidat'),
+            ),
+          ),
           Positioned(
             top: 40,
             right: 20,
             child: ElevatedButton(
-              onPressed: _toggleTheme, // استدعاء الدالة المحدثة
+              onPressed: _toggleTheme,
               style: ElevatedButton.styleFrom(
                 backgroundColor: ApiConfig.kPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
@@ -214,7 +223,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // --- دوال الـ Widgets الفرعية تبقى كما هي مع التأكد من تمرير _isDarkMode لها ---
   Widget _buildDropdown(Color textColor, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15),

@@ -13,6 +13,10 @@ import 'screens/manage_payments_screen.dart';
 import 'screens/users_screen.dart';
 import 'screens/manage_candidatures_screen.dart';
 import 'screens/subscriptions_screen.dart';
+import 'screens/espace_candidat_screen.dart';
+import 'screens/mes_candidatures_screen.dart';
+import 'screens/postuler_screen.dart';
+import 'screens/profile_entreprise_screen.dart';
 
 const List<String> dgRoles = [
   'DG',
@@ -75,7 +79,7 @@ class _MyAppState extends State<MyApp> {
           elevation: 0,
         ),
       ),
-      initialRoute: '/login',
+      initialRoute: '/espace-candidat', // تم تغييرها من /login لتعمل كواجهة أولى
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
@@ -83,12 +87,15 @@ class _MyAppState extends State<MyApp> {
         '/all-stats': (context) => AllStatsScreen(),
         '/manage-offres': (context) => ManageOffresScreen(),
         '/profile': (context) => ProfileScreen(),
-        '/espace-candidat': (context) => MainNavigation(),
+        '/espace-candidat': (context) => const EspaceCandidat(),
         '/manage-enterprises': (context) => ManageEnterprisesScreen(),
         '/manage-payments': (context) => ManagePaymentsScreen(),
         '/users': (context) => UsersScreen(),
         '/manage-candidatures': (context) => const ManageCandidaturesScreen(),
         '/subscriptions': (context) => const SubscriptionsScreen(),
+        '/mes-candidatures': (context) => const MesCandidaturesScreen(),
+        '/postuler': (context) => const PostulerScreen(),
+        '/profile-entreprise': (context) => const ProfileEntrepriseScreen(),
       },
     );
   }
@@ -105,6 +112,7 @@ class _AppDrawerState extends State<AppDrawer> {
   final _storage = const FlutterSecureStorage();
   String _user = "Utilisateur";
   String _role = "";
+  String? _enterpriseId;
 
   @override
   void initState() {
@@ -115,10 +123,12 @@ class _AppDrawerState extends State<AppDrawer> {
   _loadUserInfo() async {
     String? u = await _storage.read(key: 'username');
     String? r = await _storage.read(key: 'role');
+    String? eId = await _storage.read(key: 'enterprise_id');
     if (mounted) {
       setState(() {
         _user = u ?? "Utilisateur";
         _role = (r ?? "").toUpperCase().trim();
+        _enterpriseId = eId;
       });
     }
   }
@@ -128,7 +138,7 @@ class _AppDrawerState extends State<AppDrawer> {
     bool isSuperAdmin = _role == 'SUPER_ADMIN';
     bool isDG = dgRoles.contains(_role);
     bool isAgent = _role == 'ADMIN' || _role == 'RESPONSABLE RH';
-    bool isCandidat = _role == 'CANDIDAT';
+    bool isCandidat = _role == 'CANDIDAT' || _role == "";
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
@@ -140,7 +150,7 @@ class _AppDrawerState extends State<AppDrawer> {
           UserAccountsDrawerHeader(
             decoration: BoxDecoration(color: isDark ? ApiConfig.kBgCard : ApiConfig.kPrimary),
             accountName: Text(_user, style: const TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: Text(_role, style: TextStyle(color: isDark ? ApiConfig.kPrimary : Colors.white70, fontSize: 12)),
+            accountEmail: Text(_role.isEmpty ? "Visiteur" : _role, style: TextStyle(color: isDark ? ApiConfig.kPrimary : Colors.white70, fontSize: 12)),
             currentAccountPicture: CircleAvatar(
               backgroundColor: isDark ? ApiConfig.kPrimary : Colors.white,
               child: Text(_user.isNotEmpty ? _user[0].toUpperCase() : "U",
@@ -163,13 +173,29 @@ class _AppDrawerState extends State<AppDrawer> {
                 if (isDG || isAgent) ...[
                   _buildItem(context, Icons.work_outline, "Gestion Offres", '/manage-offres'),
                   _buildItem(context, Icons.assignment_turned_in_outlined, "Candidatures", '/manage-candidatures'),
+                  if (_enterpriseId != null && _enterpriseId!.isNotEmpty)
+                    ListTile(
+                      leading: Icon(Icons.business, color: isDark ? Colors.white70 : Colors.black54),
+                      title: const Text("Mon Entreprise", style: TextStyle(fontSize: 14)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(
+                          context,
+                          '/profile-entreprise',
+                          arguments: {'id': int.parse(_enterpriseId!)}
+                        );
+                      },
+                    ),
                 ],
+
                 if (isCandidat) ...[
                   _buildItem(context, Icons.search, "Explorer Offres", '/espace-candidat'),
-                  _buildItem(context, Icons.history_edu_outlined, "Mes Candidatures", '/mes-candidatures'),
+                  if (_role != "") // لا تظهر "طلباتي" للزائر غير المسجل
+                    _buildItem(context, Icons.history_edu_outlined, "Mes Postulations", '/mes-candidatures'),
                 ],
                 if (isDG || isSuperAdmin)
                   _buildItem(context, Icons.people_outline, "Users System", '/users'),
+
                 _buildItem(context, Icons.person_outline, "Mon Profil", '/profile'),
 
                 Divider(color: theme.dividerColor),
@@ -185,7 +211,7 @@ class _AppDrawerState extends State<AppDrawer> {
             ),
           ),
           Divider(color: theme.dividerColor),
-          _buildItem(context, Icons.logout_rounded, "Déconnexion", '/login', isLogout: true),
+          _buildItem(context, Icons.logout_rounded, "Déconnexion", '/espace-candidat', isLogout: true),
           const SizedBox(height: 20),
         ],
       ),
@@ -201,7 +227,8 @@ class _AppDrawerState extends State<AppDrawer> {
         if (isLogout) {
           await _storage.deleteAll();
           if (!mounted) return;
-          Navigator.pushNamedAndRemoveUntil(context, route, (r) => false);
+          // التوجيه لصفحة البداية (الفضاء العام) بعد الخروج
+          Navigator.pushNamedAndRemoveUntil(context, '/espace-candidat', (r) => false);
         } else {
           Navigator.pop(context);
           Navigator.pushNamed(context, route);
