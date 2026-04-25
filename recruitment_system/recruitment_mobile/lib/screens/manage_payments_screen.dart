@@ -26,6 +26,7 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
   }
 
   Future<void> fetchData() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
@@ -37,12 +38,14 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
         http.get(Uri.parse('${ApiConfig.baseUrl}/api/subscription-plans/'), headers: config),
       ]);
 
-      setState(() {
-        if (results[0].statusCode == 200) subscriptions = json.decode(utf8.decode(results[0].bodyBytes));
-        if (results[1].statusCode == 200) accounts = json.decode(utf8.decode(results[1].bodyBytes));
-        if (results[2].statusCode == 200) plans = json.decode(utf8.decode(results[2].bodyBytes));
-        loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          if (results[0].statusCode == 200) subscriptions = json.decode(utf8.decode(results[0].bodyBytes));
+          if (results[1].statusCode == 200) accounts = json.decode(utf8.decode(results[1].bodyBytes));
+          if (results[2].statusCode == 200) plans = json.decode(utf8.decode(results[2].bodyBytes));
+          loading = false;
+        });
+      }
     } catch (e) {
       debugPrint("Error fetching finance data: $e");
       if (mounted) setState(() => loading = false);
@@ -86,29 +89,28 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     }
   }
 
-  // --- دالات النوافذ المنبثقة الجديدة ---
-
   void _showAddAccountDialog() {
     final nameController = TextEditingController();
     final numberController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ApiConfig.kBgCard,
-        title: const Text("Nouveau Compte", style: TextStyle(color: Colors.white, fontSize: 18)),
+        backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
+        title: Text("Nouveau Compte", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildTextField(nameController, "Nom de la Banque"),
+            _buildTextField(nameController, "Nom de la Banque", isDark),
             const SizedBox(height: 10),
-            _buildTextField(numberController, "Numéro de Compte", isNumber: true),
+            _buildTextField(numberController, "Numéro de Compte", isDark, isNumber: true),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler", style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Annuler", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary),
+            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, foregroundColor: Colors.white),
             onPressed: () async {
               await _submitNewItem('payment-methods/', {
                 'provider_name': nameController.text,
@@ -128,30 +130,31 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     final priceController = TextEditingController();
     final offersController = TextEditingController();
     final durationController = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ApiConfig.kBgCard,
-        title: const Text("Créer un Plan", style: TextStyle(color: Colors.white, fontSize: 18)),
+        backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
+        title: Text("Créer un Plan", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildTextField(titleController, "Titre"),
+              _buildTextField(titleController, "Titre", isDark),
               const SizedBox(height: 10),
-              _buildTextField(priceController, "Prix (MRU)", isNumber: true),
+              _buildTextField(priceController, "Prix (MRU)", isDark, isNumber: true),
               const SizedBox(height: 10),
-              _buildTextField(offersController, "Nombre d'offres", isNumber: true),
+              _buildTextField(offersController, "Nombre d'offres", isDark, isNumber: true),
               const SizedBox(height: 10),
-              _buildTextField(durationController, "Durée (Mois)", isNumber: true),
+              _buildTextField(durationController, "Durée (Mois)", isDark, isNumber: true),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Fermer", style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Fermer", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
             onPressed: () async {
               await _submitNewItem('subscription-plans/', {
                 'title': titleController.text,
@@ -191,31 +194,33 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     }
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint, {bool isNumber = false}) {
+  Widget _buildTextField(TextEditingController controller, String hint, bool isDark, {bool isNumber = false}) {
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white24, fontSize: 14),
+        hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.black26, fontSize: 14),
         filled: true,
-        fillColor: Colors.black12,
+        fillColor: isDark ? Colors.black12 : Colors.grey.withOpacity(0.1),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
       ),
     );
   }
 
-  // --- نهاية الدالات الجديدة ---
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("Administration Financière"),
+        title: Text("Administration Financière", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_card, color: ApiConfig.kPrimary),
@@ -231,37 +236,38 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
           ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
           : RefreshIndicator(
               onRefresh: fetchData,
+              color: ApiConfig.kPrimary,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildSectionHeader(Icons.credit_card, "Comptes de Réception"),
-                  _buildAccountsList(),
+                  _buildSectionHeader(Icons.credit_card, "Comptes de Réception", isDark),
+                  _buildAccountsList(theme, isDark),
                   const SizedBox(height: 25),
-                  _buildSectionHeader(Icons.layers, "Packs d'Abonnement"),
-                  _buildPlansList(),
+                  _buildSectionHeader(Icons.layers, "Packs d'Abonnement", isDark),
+                  _buildPlansList(theme, isDark),
                   const SizedBox(height: 25),
-                  _buildSectionHeader(Icons.verified_user, "Vérification des reçus"),
-                  _buildVerificationList(),
+                  _buildSectionHeader(Icons.verified_user, "Vérification des reçus", isDark),
+                  _buildVerificationList(theme, isDark),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildSectionHeader(IconData icon, String title) {
+  Widget _buildSectionHeader(IconData icon, String title, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white24, size: 20),
+          Icon(icon, color: isDark ? Colors.white24 : Colors.black26, size: 20),
           const SizedBox(width: 8),
-          Text(title, style: const TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(title, style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontWeight: FontWeight.bold, fontSize: 13)),
         ],
       ),
     );
   }
 
-  Widget _buildAccountsList() {
+  Widget _buildAccountsList(ThemeData theme, bool isDark) {
     return SizedBox(
       height: 100,
       child: ListView.builder(
@@ -274,9 +280,10 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
             margin: const EdgeInsets.only(right: 15),
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
-              color: ApiConfig.kBgCard,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
+              border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+              boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
             ),
             child: Row(
               children: [
@@ -287,8 +294,8 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(acc['provider_name'], style: const TextStyle(color: Colors.white54, fontSize: 11)),
-                      Text(acc['account_number'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(acc['provider_name'], style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 11)),
+                      Text(acc['account_number'], style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                 ),
@@ -301,38 +308,43 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     );
   }
 
-  Widget _buildPlansList() {
+  Widget _buildPlansList(ThemeData theme, bool isDark) {
     return Column(
       children: plans.map((plan) => Container(
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: ApiConfig.kBgCard,
+          color: theme.cardColor,
           borderRadius: BorderRadius.circular(12),
           border: const Border(left: BorderSide(color: Colors.orange, width: 4)),
+          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
         ),
         child: ListTile(
           leading: const Icon(Icons.card_membership, color: Colors.orange),
-          title: Text(plan['title'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-          subtitle: Text("${plan['price']} MRU / ${plan['duration_months']} Mois", style: const TextStyle(color: Colors.white38, fontSize: 12)),
-          trailing: IconButton(icon: const Icon(Icons.delete_sweep, color: Colors.white24), onPressed: () => handleDelete("subscription-plans", plan['id'])),
+          title: Text(plan['title'], style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+          subtitle: Text("${plan['price']} MRU / ${plan['duration_months']} Mois", style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 12)),
+          trailing: IconButton(icon: Icon(Icons.delete_sweep, color: isDark ? Colors.white24 : Colors.black26), onPressed: () => handleDelete("subscription-plans", plan['id'])),
         ),
       )).toList(),
     );
   }
 
-  Widget _buildVerificationList() {
+  Widget _buildVerificationList(ThemeData theme, bool isDark) {
     return Column(
       children: subscriptions.map((sub) => Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(color: ApiConfig.kBgCard, borderRadius: BorderRadius.circular(15)),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
+        ),
         child: Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(sub['enterprise_name'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text(sub['enterprise_name'], style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
                   const SizedBox(height: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -356,6 +368,7 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
   }
 
   void _showReceiptPreview(String url) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -367,11 +380,15 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
               borderRadius: BorderRadius.circular(15),
               child: Image.network("${ApiConfig.baseUrl}$url",
                 fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100, color: Colors.white24),
+                errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 100, color: isDark ? Colors.white24 : Colors.black26),
               ),
             ),
             const SizedBox(height: 10),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text("Fermer")),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Fermer")
+            ),
           ],
         ),
       ),
@@ -379,14 +396,15 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
   }
 
   Future<bool> _showConfirmDialog(String msg) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ApiConfig.kBgCard,
-        title: const Text("Confirmation", style: TextStyle(color: Colors.white)),
-        content: Text(msg, style: const TextStyle(color: Colors.white70)),
+        backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
+        title: Text("Confirmation", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+        content: Text(msg, style: TextStyle(color: isDark ? Colors.white70 : Colors.black54)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Non")),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("Non", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui", style: TextStyle(color: Colors.redAccent))),
         ],
       ),
@@ -394,6 +412,8 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 }

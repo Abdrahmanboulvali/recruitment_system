@@ -24,6 +24,7 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
   }
 
   Future<void> fetchEnterprises() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
@@ -33,10 +34,12 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
       );
 
       if (response.statusCode == 200) {
-        setState(() {
-          enterprises = json.decode(utf8.decode(response.bodyBytes));
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            enterprises = json.decode(utf8.decode(response.bodyBytes));
+            loading = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error fetching enterprises: $e");
@@ -44,7 +47,6 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     }
   }
 
-  // منطق التفعيل (Approve)
   Future<void> handleApprove(int? userId) async {
     if (userId == null) return;
     bool confirm = await _showConfirmDialog("Approuver cette entité ?");
@@ -66,7 +68,6 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     }
   }
 
-  // منطق إلغاء التفعيل (Deactivate)
   Future<void> handleDeactivate(int? userId) async {
     if (userId == null) return;
     bool confirm = await _showConfirmDialog("Désactiver cette entité ?");
@@ -88,7 +89,6 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     }
   }
 
-  // منطق الحذف (Delete)
   Future<void> handleDelete(int enterpriseId) async {
     bool confirm = await _showConfirmDialog("Voulez-vous vraiment supprimer définitivement cette entreprise ?");
     if (!confirm) return;
@@ -109,7 +109,6 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     }
   }
 
-  // فتح المستند (PDF أو صورة)
   Future<void> openPreview(String? fileUrl) async {
     if (fileUrl == null) return;
     final fullUrl = fileUrl.startsWith('http') ? fileUrl : "${ApiConfig.baseUrl}$fileUrl";
@@ -124,22 +123,28 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("Gestion des Entités", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text("Gestion des Entités",
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
-          : _buildEnterprisesGrid(),
+          : _buildEnterprisesGrid(theme, isDark),
     );
   }
 
-  Widget _buildEnterprisesGrid() {
+  Widget _buildEnterprisesGrid(ThemeData theme, bool isDark) {
     if (enterprises.isEmpty) {
-      return const Center(child: Text("Aucune entreprise trouvée", style: TextStyle(color: Colors.white24)));
+      return Center(child: Text("Aucune entreprise trouvée",
+        style: TextStyle(color: isDark ? Colors.white24 : Colors.black26)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -152,16 +157,16 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
           margin: const EdgeInsets.only(bottom: 20),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: ApiConfig.kBgCard,
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isApproved ? Colors.green.withOpacity(0.5) : Colors.orange.withOpacity(0.5),
               width: 2,
             ),
+            boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
           ),
           child: Column(
             children: [
-              // Badge الحالة (Badge Status)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -169,7 +174,7 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: isApproved ? Colors.green.withOpacity(0.2) : Colors.orange.withOpacity(0.2),
+                      color: isApproved ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -185,14 +190,13 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
               ),
               const SizedBox(height: 15),
               Text(ent['name'] ?? "Nom non défini",
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 8),
               Text(ent['description'] ?? 'Aucune description',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                  style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13)),
               const SizedBox(height: 20),
 
-              // معلومات المدير والمستند (Manager Info)
               Container(
                 padding: const EdgeInsets.all(12),
                 width: double.infinity,
@@ -209,7 +213,6 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
               ),
               const SizedBox(height: 10),
 
-              // زر رؤية المستند
               if (ent['verification_document'] != null)
                 SizedBox(
                   width: double.infinity,
@@ -228,7 +231,6 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
 
               const SizedBox(height: 20),
 
-              // أزرار التحكم (Action Buttons)
               if (isApproved)
                 _buildActionButton("Désactiver l'entité", Colors.orange, () => handleDeactivate(ent['owner_id']))
               else
@@ -256,31 +258,37 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(vertical: 12),
         ),
         onPressed: onPressed,
-        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }
 
   Future<bool> _showConfirmDialog(String message) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: ApiConfig.kBgCard,
+        backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
         title: const Text("Confirmation"),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Annuler", style: TextStyle(color: Colors.white54))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Confirmer", style: TextStyle(color: ApiConfig.kPrimary))),
+          TextButton(onPressed: () => Navigator.pop(ctx, false),
+            child: Text("Annuler", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Confirmer", style: TextStyle(color: ApiConfig.kPrimary))),
         ],
       ),
     ) ?? false;
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 }

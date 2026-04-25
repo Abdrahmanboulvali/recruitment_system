@@ -29,7 +29,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     fetchData();
   }
 
-  // دالة مساعدة لتحويل السعر إلى رقم بأمان لتجنب خطأ المقارنة
   double _parsePrice(dynamic price) {
     if (price == null) return 0.0;
     if (price is num) return price.toDouble();
@@ -37,6 +36,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   Future<void> fetchData() async {
+    if (!mounted) return;
+    setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
       final config = {'Authorization': 'Bearer $token'};
@@ -101,35 +102,42 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("Plans d'Abonnement", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text("Plans d'Abonnement",
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
           : RefreshIndicator(
               onRefresh: fetchData,
+              color: ApiConfig.kPrimary,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  const Text("Gérez votre abonnement et découvrez nos solutions premium.",
-                      textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
+                  Text("Gérez votre abonnement et découvrez nos solutions premium.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
                   const SizedBox(height: 25),
-                  if (activeSubscription != null) _buildActiveSubCard(),
-                  if (pendingRequests.isNotEmpty) _buildPendingSection(),
-                  _buildPaymentMethods(),
+                  if (activeSubscription != null) _buildActiveSubCard(isDark),
+                  if (pendingRequests.isNotEmpty) _buildPendingSection(isDark),
+                  _buildPaymentMethods(theme, isDark),
                   const SizedBox(height: 20),
-                  ...plans.map((plan) => _buildPlanCard(plan)).toList(),
+                  ...plans.map((plan) => _buildPlanCard(plan, theme, isDark)).toList(),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildActiveSubCard() {
+  Widget _buildActiveSubCard(bool isDark) {
     final details = activeSubscription?['plan_details'];
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -148,24 +156,24 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             Text("Votre abonnement est actif", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
           ]),
           const SizedBox(height: 15),
-          _rowInfo("Pack:", details?['title']?.toString() ?? "N/A"),
-          _rowInfo("Utilisation:", "${details?['current_usage'] ?? 0} / ${details?['offres_count'] ?? 0} offres"),
+          _rowInfo("Pack:", details?['title']?.toString() ?? "N/A", isDark),
+          _rowInfo("Utilisation:", "${details?['current_usage'] ?? 0} / ${details?['offres_count'] ?? 0} offres", isDark),
           _rowInfo("Expire le:", activeSubscription?['date_expiration'] != null
               ? DateFormat('dd/MM/yyyy').format(DateTime.parse(activeSubscription!['date_expiration']))
-              : "N/A"),
+              : "N/A", isDark),
         ],
       ),
     );
   }
 
-  Widget _buildPendingSection() {
+  Widget _buildPendingSection(bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 25),
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.05),
+        color: Colors.orange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+        border: Border.all(color: Colors.orange.withOpacity(0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,7 +186,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           const SizedBox(height: 10),
           ...pendingRequests.map((req) => ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(req['plan_details']?['title']?.toString() ?? "Plan", style: const TextStyle(color: Colors.white, fontSize: 14)),
+            title: Text(req['plan_details']?['title']?.toString() ?? "Plan",
+              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
             subtitle: const Text("Vérification du paiement...", style: TextStyle(color: Colors.orange, fontSize: 11)),
           )).toList(),
         ],
@@ -186,23 +195,30 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  Widget _buildPaymentMethods() {
+  Widget _buildPaymentMethods(ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: ApiConfig.kBgCard, borderRadius: BorderRadius.circular(15)),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+      ),
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
         children: accounts.map((acc) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(border: Border.all(color: ApiConfig.kPrimary), borderRadius: BorderRadius.circular(10)),
-          child: Text("${acc['provider_name']}: ${acc['account_number']}", style: const TextStyle(fontSize: 12, color: Colors.white)),
+          decoration: BoxDecoration(
+            border: Border.all(color: ApiConfig.kPrimary.withOpacity(0.5)),
+            borderRadius: BorderRadius.circular(10)),
+          child: Text("${acc['provider_name']}: ${acc['account_number']}",
+            style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
         )).toList(),
       ),
     );
   }
 
-  Widget _buildPlanCard(Map plan) {
+  Widget _buildPlanCard(Map plan, ThemeData theme, bool isDark) {
     bool isCurrent = activeSubscription != null && activeSubscription!['plan'] == plan['id'];
     double priceValue = _parsePrice(plan['price']);
 
@@ -210,31 +226,34 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       margin: const EdgeInsets.symmetric(vertical: 10),
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: isCurrent ? Colors.green : ApiConfig.kPrimary, width: 2),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: Column(
         children: [
           if (isCurrent) const Align(alignment: Alignment.topRight, child: Badge(label: Text("ACTUEL"), backgroundColor: Colors.green)),
           Icon(priceValue > 1000 ? Icons.bolt : Icons.star, color: priceValue > 1000 ? Colors.orange : ApiConfig.kPrimary, size: 40),
           const SizedBox(height: 10),
-          Text(plan['title']?.toString() ?? "", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(plan['title']?.toString() ?? "",
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
           const SizedBox(height: 10),
           Text("${plan['price']} MRU", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
-          const Divider(color: Colors.white10, height: 30),
-          _featureRow("${plan['offres_count']} Offres"),
-          _featureRow("Validité: ${plan['duration_months']} mois"),
+          Divider(color: isDark ? Colors.white10 : Colors.black12, height: 30),
+          _featureRow("${plan['offres_count']} Offres", isDark),
+          _featureRow("Validité: ${plan['duration_months']} mois", isDark),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: isCurrent ? Colors.green : ApiConfig.kPrimary,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(vertical: 15),
               ),
-              onPressed: () => _showUploadSheet(plan),
+              onPressed: () => _showUploadSheet(plan, theme, isDark),
               child: Text(isCurrent ? "Renouveler" : "Choisir ce plan", style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
@@ -243,11 +262,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  void _showUploadSheet(Map plan) {
+  void _showUploadSheet(Map plan, ThemeData theme, bool isDark) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: ApiConfig.kBgCard,
+      backgroundColor: theme.cardColor,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
@@ -255,7 +274,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Confirmer: ${plan['title']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("Confirmer: ${plan['title']}",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 20),
               GestureDetector(
                 onTap: () => _pickImage(setModalState),
@@ -263,17 +283,21 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
                   height: 150,
                   width: double.infinity,
                   decoration: BoxDecoration(
+                    color: isDark ? Colors.black12 : Colors.grey.withOpacity(0.05),
                     border: Border.all(color: ApiConfig.kPrimary, style: BorderStyle.solid),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: _receiptFile == null
-                    ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.upload_file, size: 40, color: ApiConfig.kPrimary), Text("Cliquez pour joindre le reçu")])
+                    ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        const Icon(Icons.upload_file, size: 40, color: ApiConfig.kPrimary),
+                        Text("Cliquez pour joindre le reçu", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))
+                      ])
                     : ClipRRect(borderRadius: BorderRadius.circular(15), child: Image.file(_receiptFile!, fit: BoxFit.cover)),
                 ),
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 50)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)),
                 onPressed: () {
                   handleSubscribe(plan['id']);
                   Navigator.pop(context);
@@ -288,21 +312,31 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  Widget _rowInfo(String label, String value) {
+  Widget _rowInfo(String label, String value, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [Text(label, style: const TextStyle(color: Colors.white54)), const SizedBox(width: 5), Text(value, style: const TextStyle(fontWeight: FontWeight.bold))]),
+      child: Row(children: [
+        Text(label, style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
+        const SizedBox(width: 5),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
+      ]),
     );
   }
 
-  Widget _featureRow(String text) {
+  Widget _featureRow(String text, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [const Icon(Icons.check_circle, color: Colors.green, size: 18), const SizedBox(width: 10), Text(text)]),
+      child: Row(children: [
+        const Icon(Icons.check_circle, color: Colors.green, size: 18),
+        const SizedBox(width: 10),
+        Text(text, style: TextStyle(color: isDark ? Colors.white : Colors.black87))
+      ]),
     );
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 }

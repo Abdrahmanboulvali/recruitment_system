@@ -51,19 +51,20 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // التحقق مما إذا كان المستخدم مديراً بناءً على قائمة الرتب التي حددتها سابقاً
     bool isSuperAdmin = role == 'SUPER_ADMIN';
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
-      // 1. إضافة الـ AppBar لفتح القائمة الجانبية
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: ApiConfig.kBgMain,
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
-        title: const Text("Analytiques Système", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        title: Text("Analytiques Système",
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
         centerTitle: true,
       ),
-      // 2. إضافة الـ Drawer الموحد
       drawer: const AppDrawer(),
 
       body: isLoading
@@ -72,7 +73,7 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
               onRefresh: _fetchStats,
               child: CustomScrollView(
                 slivers: [
-                  _buildHeader(),
+                  _buildHeader(isDark),
                   SliverPadding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     sliver: SliverGrid(
@@ -83,15 +84,14 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
                         childAspectRatio: 1.1,
                       ),
                       delegate: SliverChildListDelegate([
-                        _statCard("Entreprises", stats['total_enterprises'] ?? 0, Icons.business, [Colors.indigo, Colors.blue]),
-                        _statCard("Utilisateurs", stats['total_users'] ?? 0, Icons.people, [Colors.teal, Colors.green]),
-                        _statCard("Offres", stats['total_offres'] ?? stats['total_offers'] ?? 0, Icons.work, [Colors.orange, Colors.amber]),
-                        _statCard("Candidats", stats['total_candidatures'] ?? stats['total_candidates'] ?? 0, Icons.person_search, [Colors.pink, Colors.pinkAccent]),
+                        _statCard("Entreprises", stats['total_enterprises'] ?? 0, Icons.business, [Colors.indigo, Colors.blue], theme, isDark),
+                        _statCard("Utilisateurs", stats['total_users'] ?? 0, Icons.people, [Colors.teal, Colors.green], theme, isDark),
+                        _statCard("Offres", stats['total_offres'] ?? stats['total_offers'] ?? 0, Icons.work, [Colors.orange, Colors.amber], theme, isDark),
+                        _statCard("Candidats", stats['total_candidatures'] ?? stats['total_candidates'] ?? 0, Icons.person_search, [Colors.pink, Colors.pinkAccent], theme, isDark),
                       ]),
                     ),
                   ),
 
-                  // 3. قسم أزرار الإجراءات السريعة (تطابق الويب)
                   if (isSuperAdmin)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -102,8 +102,8 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
                             const Text("ACTIONS ADMINISTRATIVES",
                               style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 15),
-                            _buildQuickActionButton(Icons.admin_panel_settings, "Gérer les Entreprises", "Validation et contrôle", () => Navigator.pushNamed(context, '/manage-enterprises')),
-                            _buildQuickActionButton(Icons.payments_rounded, "Flux de Paiements", "Suivi des abonnements", () => Navigator.pushNamed(context, '/manage-payments')),
+                            _buildQuickActionButton(Icons.admin_panel_settings, "Gérer les Entreprises", "Validation et contrôle", () => Navigator.pushNamed(context, '/manage-enterprises'), theme, isDark),
+                            _buildQuickActionButton(Icons.payments_rounded, "Flux de Paiements", "Suivi des abonnements", () => Navigator.pushNamed(context, '/manage-payments'), theme, isDark),
                           ],
                         ),
                       ),
@@ -112,7 +112,7 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildChartSection(),
+                      child: _buildChartSection(theme, isDark),
                     ),
                   ),
                   const SliverToBoxAdapter(child: SizedBox(height: 50)),
@@ -122,13 +122,14 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
     );
   }
 
-  Widget _buildQuickActionButton(IconData icon, String title, String sub, VoidCallback onTap) {
+  Widget _buildQuickActionButton(IconData icon, String title, String sub, VoidCallback onTap, ThemeData theme, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
       ),
       child: ListTile(
         onTap: onTap,
@@ -136,14 +137,14 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
           backgroundColor: ApiConfig.kPrimary.withOpacity(0.1),
           child: Icon(icon, color: ApiConfig.kPrimary, size: 20),
         ),
-        title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+        title: Text(title, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14, fontWeight: FontWeight.bold)),
         subtitle: Text(sub, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 14),
+        trailing: Icon(Icons.arrow_forward_ios, color: isDark ? Colors.white24 : Colors.black26, size: 14),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDark) {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
@@ -155,7 +156,7 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
                 const Icon(Icons.analytics_outlined, color: ApiConfig.kPrimary, size: 30),
                 const SizedBox(width: 10),
                 Text(role == 'SUPER_ADMIN' ? "Direction Générale" : "System Analytics",
-                    style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 24, fontWeight: FontWeight.bold)),
               ],
             ),
             const Text("PERFORMANCE INSIGHT SYSTEM",
@@ -166,13 +167,14 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
     );
   }
 
-  Widget _statCard(String title, dynamic count, IconData icon, List<Color> colors) {
+  Widget _statCard(String title, dynamic count, IconData icon, List<Color> colors, ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +188,7 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(count.toString(), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              Text(count.toString(), style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 22, fontWeight: FontWeight.w900)),
               Text(title.toUpperCase(), style: const TextStyle(color: Colors.grey, fontSize: 9, fontWeight: FontWeight.bold)),
             ],
           )
@@ -195,21 +197,22 @@ class _AllStatsScreenState extends State<AllStatsScreen> {
     );
   }
 
-  Widget _buildChartSection() {
+  Widget _buildChartSection(ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
       ),
       child: Column(
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.pie_chart_outline, color: ApiConfig.kPrimary),
-              SizedBox(width: 10),
-              Text("Répartition de la Pertinence", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              const Icon(Icons.pie_chart_outline, color: ApiConfig.kPrimary),
+              const SizedBox(width: 10),
+              Text("Répartition de la Pertinence", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 30),

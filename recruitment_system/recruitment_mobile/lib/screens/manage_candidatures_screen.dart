@@ -19,7 +19,6 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
   Map<int, String> candidatsMap = {};
   bool loading = true;
 
-  // متغيرات الفلترة والبحث
   String searchTerm = "";
   double minScore = 0.0;
 
@@ -59,10 +58,12 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
         var candidatsJson = json.decode(utf8.decode(results[1].bodyBytes));
         candidatsMap = {for (var c in candidatsJson) c['id']: "${c['nom']} ${c['prenom']}"};
 
-        setState(() {
-          candidatures = json.decode(utf8.decode(results[2].bodyBytes));
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            candidatures = json.decode(utf8.decode(results[2].bodyBytes));
+            loading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) setState(() => loading = false);
@@ -87,7 +88,6 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     }
   }
 
-  // منطق الفلترة المتقدم المتطابق مع الويب
   List get filteredCandidatures {
     return candidatures.where((can) {
       final name = (candidatsMap[can['candidat']] ?? "").toLowerCase();
@@ -107,27 +107,31 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    // تقسيم البيانات حسب الحالة للعرض المنظم
+    if (loading) return Scaffold(backgroundColor: theme.scaffoldBackgroundColor, body: const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary)));
+
     final pending = filteredCandidatures.where((c) => c['statut'].toString().toLowerCase().contains('attente')).toList();
     final accepted = filteredCandidatures.where((c) => c['statut'].toString().toLowerCase().contains('accepté')).toList();
     final rejected = filteredCandidatures.where((c) => c['statut'].toString().toLowerCase().contains('refusé')).toList();
 
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("Gestion Candidatures", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text("Gestion Candidatures",
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: Colors.transparent,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         elevation: 0,
       ),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildSearchAndFilterBox(), // خانة البحث الذكية
-            _buildSection("Candidatures En Attente", pending, Colors.orange),
-            _buildSection("Candidatures Acceptées", accepted, Colors.green),
-            _buildSection("Candidatures Refusées", rejected, Colors.red),
+            _buildSearchAndFilterBox(theme, isDark),
+            _buildSection("Candidatures En Attente", pending, Colors.orange, isDark),
+            _buildSection("Candidatures Acceptées", accepted, Colors.green, isDark),
+            _buildSection("Candidatures Refusées", rejected, Colors.red, isDark),
             const SizedBox(height: 30),
           ],
         ),
@@ -135,29 +139,29 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  // تصميم خانة البحث والفلترة كما في الويب
-  Widget _buildSearchAndFilterBox() {
+  Widget _buildSearchAndFilterBox(ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("RECHERCHE GLOBALE (Nom, Poste, Score)",
-            style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+          Text("RECHERCHE GLOBALE (Nom, Poste, Score)",
+            style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           TextField(
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
             decoration: InputDecoration(
               hintText: "Rechercher partout...",
-              hintStyle: const TextStyle(color: Colors.white24),
+              hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.black38),
               filled: true,
-              fillColor: Colors.black26,
+              fillColor: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
               contentPadding: const EdgeInsets.symmetric(horizontal: 15),
             ),
@@ -167,7 +171,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("SCORE MINIMUM:", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text("SCORE MINIMUM:", style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold)),
               Text("${minScore.toInt()}%", style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -176,7 +180,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
             min: 0,
             max: 100,
             activeColor: ApiConfig.kPrimary,
-            inactiveColor: Colors.white10,
+            inactiveColor: isDark ? Colors.white10 : Colors.black12,
             onChanged: (val) => setState(() => minScore = val),
           ),
         ],
@@ -184,7 +188,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  Widget _buildSection(String title, List data, Color color) {
+  Widget _buildSection(String title, List data, Color color, bool isDark) {
     if (data.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,23 +198,25 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
           child: Text("$title (${data.length})",
             style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
         ),
-        ...data.map((can) => _buildCard(can)).toList(),
+        ...data.map((can) => _buildCard(can, isDark)).toList(),
       ],
     );
   }
 
-  Widget _buildCard(Map can) {
+  Widget _buildCard(Map can, bool isDark) {
     String name = candidatsMap[can['candidat']] ?? "Inconnu";
     String job = offresData[can['offre']]?['titre'] ?? "Poste Inconnu";
     double score = (can['score'] as num).toDouble();
+    final theme = Theme.of(context);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
       ),
       child: Column(
         children: [
@@ -220,7 +226,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                    Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: isDark ? Colors.white : Colors.black87)),
                     const SizedBox(height: 2),
                     Text(job, style: const TextStyle(color: ApiConfig.kPrimary, fontSize: 13)),
                   ],
@@ -228,8 +234,17 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: const Text("En attente", style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(
+                  color: can['statut'].toString().toLowerCase().contains('attente')
+                    ? Colors.orange.withOpacity(0.1)
+                    : (can['statut'].toString().toLowerCase().contains('accepté') ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1)),
+                  borderRadius: BorderRadius.circular(8)),
+                child: Text(can['statut'],
+                  style: TextStyle(
+                    color: can['statut'].toString().toLowerCase().contains('attente')
+                      ? Colors.orange
+                      : (can['statut'].toString().toLowerCase().contains('accepté') ? Colors.green : Colors.red),
+                    fontSize: 11, fontWeight: FontWeight.bold)),
               )
             ],
           ),
@@ -242,13 +257,13 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                   child: LinearProgressIndicator(
                     value: score / 100,
                     minHeight: 8,
-                    backgroundColor: Colors.white10,
+                    backgroundColor: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
                     color: score > 50 ? Colors.orange : Colors.redAccent,
                   ),
                 ),
               ),
               const SizedBox(width: 15),
-              Text("${score.toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+              Text("${score.toInt()}%", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white70 : Colors.black54)),
             ],
           ),
           const SizedBox(height: 15),
@@ -256,8 +271,8 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.05),
-                foregroundColor: Colors.white,
+                backgroundColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                foregroundColor: isDark ? Colors.white : Colors.black87,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
               ),
@@ -271,6 +286,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
   }
 
   void _showDetailsModal(Map can) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     String name = candidatsMap[can['candidat']] ?? "";
     String job = offresData[can['offre']]?['titre'] ?? "";
     String cvUrl = getFullCvUrl(can['cv_file']);
@@ -279,7 +295,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF151921),
+      backgroundColor: isDark ? const Color(0xFF151921) : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.85,
@@ -290,25 +306,24 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
           child: ListView(
             controller: controller,
             children: [
-              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: isDark ? Colors.white24 : Colors.black12, borderRadius: BorderRadius.circular(10)))),
               const SizedBox(height: 25),
-              Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
               Text(job, style: const TextStyle(color: Colors.grey, fontSize: 16)),
               const SizedBox(height: 25),
               const Text("Taux de correspondance", style: TextStyle(color: Colors.grey)),
               Text("${score.toInt()}%", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
-              const Divider(height: 40, color: Colors.white10),
+              Divider(height: 40, color: isDark ? Colors.white10 : Colors.black12),
 
-              const Text("Analyse IA du profil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text("Analyse IA du profil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 12),
               Text(cleanComment(can['commentaire_ia']),
-                style: const TextStyle(color: Colors.white70, height: 1.6, fontSize: 15)),
+                style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, height: 1.6, fontSize: 15)),
 
               const SizedBox(height: 30),
-              // زر فتح الـ CV
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white10),
+                  side: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
                 ),
@@ -319,7 +334,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                   }
                 },
                 icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                label: const Text("Voir le CV original", style: TextStyle(color: Colors.white)),
+                label: Text("Voir le CV original", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
               ),
 
               const SizedBox(height: 40),
@@ -331,7 +346,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                         backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () => handleUpdateStatus(can['id'], 'Accepté'),
-                      child: const Text("Accepter", style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text("Accepter", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     )),
                     const SizedBox(width: 12),
                     Expanded(child: ElevatedButton(
@@ -339,12 +354,12 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                         backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () => handleUpdateStatus(can['id'], 'Refusé'),
-                      child: const Text("Refuser", style: TextStyle(fontWeight: FontWeight.bold)),
+                      child: const Text("Refuser", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     )),
                   ],
                 )
               else
-                _buildStatusBanner(can['statut']),
+                _buildStatusBanner(can['statut'], isDark),
             ],
           ),
         ),
@@ -352,7 +367,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  Widget _buildStatusBanner(String status) {
+  Widget _buildStatusBanner(String status, bool isDark) {
     bool isAcc = status.toLowerCase().contains('accepté');
     return Container(
       padding: const EdgeInsets.all(18),

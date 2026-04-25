@@ -16,12 +16,10 @@ class _UsersScreenState extends State<UsersScreen> {
   List users = [];
   bool loading = true;
 
-  // حالات الفلترة (Filters)
   String searchTerm = "";
   String roleFilter = "ALL";
   String statusFilter = "ALL";
 
-  // في الويب تم ضبطها كـ true، سنفعل المثل هنا
   bool isSuperAdmin = true;
 
   @override
@@ -31,6 +29,7 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   Future<void> fetchUsers() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
@@ -40,10 +39,12 @@ class _UsersScreenState extends State<UsersScreen> {
       );
 
       if (response.statusCode == 200) {
-        setState(() {
-          users = json.decode(utf8.decode(response.bodyBytes));
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            users = json.decode(utf8.decode(response.bodyBytes));
+            loading = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error fetching users: $e");
@@ -54,7 +55,6 @@ class _UsersScreenState extends State<UsersScreen> {
   Future<void> toggleUserStatus(Map user) async {
     final String action = user['is_active'] ? "désactiver" : "réactiver";
 
-    // حوار تأكيد كما في الويب (confirm)
     bool confirm = await _showConfirmDialog(action, user['username']);
     if (!confirm) return;
 
@@ -70,16 +70,17 @@ class _UsersScreenState extends State<UsersScreen> {
       );
 
       if (response.statusCode == 200) {
-        fetchUsers(); // إعادة جلب البيانات لتحديث الواجهة
+        fetchUsers();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Erreur lors de la modification")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Erreur lors de la modification")),
+        );
+      }
     }
   }
 
-  // منطق الفلترة المتطابق مع نسخة الويب تماماً
   List get filteredUsers {
     return users.where((user) {
       final matchesSearch = user['username'].toString().toLowerCase().contains(searchTerm.toLowerCase()) ||
@@ -97,51 +98,54 @@ class _UsersScreenState extends State<UsersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("Gestion Utilisateurs", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text("Gestion Utilisateurs",
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: Colors.transparent,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         elevation: 0,
       ),
       body: Column(
         children: [
-          _buildFilterBar(), // شريط البحث والفلترة
+          _buildFilterBar(theme, isDark),
           Expanded(
             child: loading
                 ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
-                : _buildUsersList(),
+                : _buildUsersList(isDark),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildFilterBar(ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // خانة البحث
           TextField(
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
             decoration: InputDecoration(
               hintText: "Rechercher par nom ou email...",
-              hintStyle: const TextStyle(color: Colors.white24, fontSize: 14),
-              prefixIcon: const Icon(Icons.search, color: Colors.white24),
+              hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.black38, fontSize: 14),
+              prefixIcon: Icon(Icons.search, color: isDark ? Colors.white24 : Colors.black38),
               filled: true,
-              fillColor: ApiConfig.kBgCard,
+              fillColor: theme.cardColor,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
             onChanged: (val) => setState(() => searchTerm = val),
           ),
           const SizedBox(height: 10),
-          // فلاتر الاختيار (Dropdowns)
           Row(
             children: [
-              Expanded(child: _buildDropdown("Rôle", roleFilter, ["ALL", "ADMIN", "CANDIDAT", "DG", "SUPER_ADMIN"], (val) => setState(() => roleFilter = val!))),
+              Expanded(child: _buildDropdown(theme, isDark, "Rôle", roleFilter, ["ALL", "ADMIN", "CANDIDAT", "DG", "SUPER_ADMIN"], (val) => setState(() => roleFilter = val!))),
               const SizedBox(width: 10),
-              Expanded(child: _buildDropdown("Statut", statusFilter, ["ALL", "ACTIVE", "INACTIVE"], (val) => setState(() => statusFilter = val!))),
+              Expanded(child: _buildDropdown(theme, isDark, "Statut", statusFilter, ["ALL", "ACTIVE", "INACTIVE"], (val) => setState(() => statusFilter = val!))),
             ],
           ),
         ],
@@ -149,46 +153,55 @@ class _UsersScreenState extends State<UsersScreen> {
     );
   }
 
-  Widget _buildDropdown(String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+  Widget _buildDropdown(ThemeData theme, bool isDark, String label, String value, List<String> items, ValueChanged<String?> onChanged) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(color: ApiConfig.kBgCard, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))
+      ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
-          dropdownColor: ApiConfig.kBgCard,
-          items: items.map((i) => DropdownMenuItem(value: i, child: Text(i, style: const TextStyle(color: Colors.white, fontSize: 12)))).toList(),
+          dropdownColor: theme.cardColor,
+          items: items.map((i) => DropdownMenuItem(
+            value: i,
+            child: Text(i, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 12))
+          )).toList(),
           onChanged: onChanged,
         ),
       ),
     );
   }
 
-  Widget _buildUsersList() {
+  Widget _buildUsersList(bool isDark) {
     if (filteredUsers.isEmpty) {
-      return const Center(child: Text("Aucun utilisateur trouvé", style: TextStyle(color: Colors.white24)));
+      return Center(child: Text("Aucun utilisateur trouvé", style: TextStyle(color: isDark ? Colors.white24 : Colors.black26)));
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: filteredUsers.length,
       itemBuilder: (context, index) {
         final user = filteredUsers[index];
-        return _buildUserCard(user);
+        return _buildUserCard(user, isDark);
       },
     );
   }
 
-  Widget _buildUserCard(Map user) {
+  Widget _buildUserCard(Map user, bool isDark) {
     bool isActive = user['is_active'] ?? false;
+    final theme = Theme.of(context);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)],
       ),
       child: Column(
         children: [
@@ -203,15 +216,15 @@ class _UsersScreenState extends State<UsersScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user['username'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text(user['email'], style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    Text(user['username'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+                    Text(user['email'], style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 12)),
                   ],
                 ),
               ),
               _buildRoleBadge(user['role']),
             ],
           ),
-          const Divider(height: 25, color: Colors.white10),
+          Divider(height: 25, color: isDark ? Colors.white10 : Colors.black12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -219,8 +232,8 @@ class _UsersScreenState extends State<UsersScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Entreprise", style: TextStyle(color: Colors.white24, fontSize: 10)),
-                    Text(user['enterprise_nom'] ?? "Système", style: const TextStyle(fontSize: 12)),
+                    Text("Entreprise", style: TextStyle(color: isDark ? Colors.white24 : Colors.black38, fontSize: 10)),
+                    Text(user['enterprise_nom'] ?? "Système", style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
                   ],
                 ),
               Column(
@@ -268,14 +281,15 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   Future<bool> _showConfirmDialog(String action, String username) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: ApiConfig.kBgCard,
+        backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
         title: const Text("Confirmation"),
         content: Text("Voulez-vous vraiment $action le compte de $username ?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Annuler", style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Annuler", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
           TextButton(onPressed: () => Navigator.pop(context, true), child: Text(action.toUpperCase(), style: const TextStyle(color: Colors.redAccent))),
         ],
       ),

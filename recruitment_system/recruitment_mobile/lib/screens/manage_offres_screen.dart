@@ -20,10 +20,8 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
   bool isEditing = false;
   int? currentId;
 
-  // حالة الاشتراك
   Map<String, dynamic>? subscription;
 
-  // Controllers للنموذج
   final _titreController = TextEditingController();
   final _descController = TextEditingController();
   final _expController = TextEditingController(text: '0');
@@ -40,7 +38,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
     setState(() => isLoading = true);
     await _fetchOffres();
     await _checkSubscription();
-    setState(() => isLoading = false);
+    if (mounted) setState(() => isLoading = false);
   }
 
   Future<void> _fetchOffres() async {
@@ -51,7 +49,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
         headers: {'Authorization': 'Bearer $token'},
       );
       if (res.statusCode == 200) {
-        setState(() => offres = json.decode(utf8.decode(res.bodyBytes)));
+        if (mounted) setState(() => offres = json.decode(utf8.decode(res.bodyBytes)));
       }
     } catch (e) {
       debugPrint("Error fetching offres: $e");
@@ -66,7 +64,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
         headers: {'Authorization': 'Bearer $token'},
       );
       if (res.statusCode == 200) {
-        setState(() => subscription = json.decode(utf8.decode(res.bodyBytes)));
+        if (mounted) setState(() => subscription = json.decode(utf8.decode(res.bodyBytes)));
       }
     } catch (e) {
       debugPrint("Error checking subscription: $e");
@@ -128,10 +126,10 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         _resetForm();
         _initData();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? "Modifiée !" : "Publiée !")));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? "Modifiée !" : "Publiée !")));
       } else {
         final err = json.decode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err['error'] ?? "Erreur")));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err['error'] ?? "Erreur")));
       }
     } catch (e) {
       debugPrint("Submit Error: $e");
@@ -140,14 +138,16 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        // تم تحديث زر العودة هنا لمنع الصفحة البيضاء
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: Icon(Icons.arrow_back_ios, color: isDark ? Colors.white : Colors.black87),
           onPressed: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
@@ -159,7 +159,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Gestion des Offres", style: TextStyle(fontWeight: FontWeight.bold)),
+            Text("Gestion des Offres", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             Text(
               subscription != null && subscription!['status'] == 'ACTIVE'
                   ? "✅ Pack Actif: ${subscription!['plan_details']['title']} (${subscription!['plan_details']['current_usage']}/${subscription!['plan_details']['offres_count']})"
@@ -187,38 +187,40 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  if (showForm) _buildGlassForm(),
+                  if (showForm) _buildGlassForm(theme, isDark),
                   const SizedBox(height: 20),
-                  ...offres.map((o) => _buildOffreCard(o)).toList(),
+                  ...offres.map((o) => _buildOffreCard(o, theme, isDark)).toList(),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildGlassForm() {
+  Widget _buildGlassForm(ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: ApiConfig.kBgCard,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isEditing ? "📝 Modifier" : "📌 Nouvelle offre", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+          Text(isEditing ? "📝 Modifier" : "📌 Nouvelle offre",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
           const SizedBox(height: 15),
-          _buildInput(_titreController, "Titre du poste"),
+          _buildInput(_titreController, "Titre du poste", isDark),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildInput(_expController, "Exp min", isNumber: true)),
+              Expanded(child: _buildInput(_expController, "Exp min", isDark, isNumber: true)),
               const SizedBox(width: 10),
               Expanded(
                 child: InkWell(
@@ -233,24 +235,31 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
                   },
                   child: Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10)),
-                    child: Text(_selectedDate == null ? "Date Exp." : DateFormat('dd/MM/yyyy').format(_selectedDate!), style: const TextStyle(color: Colors.white70)),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      _selectedDate == null ? "Date Exp." : DateFormat('dd/MM/yyyy').format(_selectedDate!),
+                      style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          _buildInput(_skillsController, "Compétences (ex: SQL, Java)"),
+          _buildInput(_skillsController, "Compétences (ex: SQL, Java)", isDark),
           const SizedBox(height: 10),
-          _buildInput(_descController, "Description", maxLines: 3),
+          _buildInput(_descController, "Description", isDark, maxLines: 3),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
               onPressed: _handleSubmit,
-              style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: ApiConfig.kPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: Text(isEditing ? "Enregistrer" : "Publier"),
             ),
           )
@@ -259,18 +268,23 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
     );
   }
 
-  Widget _buildOffreCard(Map o) {
+  Widget _buildOffreCard(Map o, ThemeData theme, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: ApiConfig.kBgCard, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 5)],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text(o['titre'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white))),
+              Expanded(child: Text(o['titre'], style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87))),
               Row(
                 children: [
                   IconButton(onPressed: () => _handleEditClick(o), icon: const Icon(Icons.edit, color: Colors.blue, size: 20)),
@@ -279,22 +293,24 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
               )
             ],
           ),
-          Text(o['description'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(o['description'], maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 13)),
           const SizedBox(height: 10),
           Wrap(
             spacing: 5,
             children: (o['competences_requises']?.toString().split(',') ?? []).map((s) => Chip(
               label: Text(s.trim(), style: const TextStyle(fontSize: 10, color: ApiConfig.kPrimary)),
               backgroundColor: ApiConfig.kPrimary.withOpacity(0.1),
+              side: BorderSide.none,
               padding: EdgeInsets.zero,
             )).toList(),
           ),
-          const Divider(color: Colors.white10),
+          Divider(color: isDark ? Colors.white10 : Colors.black12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("⏳ Exp: ${o['experience_min']} ans", style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              Text("⌛ Expire: ${o['date_expiration'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(o['date_expiration'])) : 'N/A'}", style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text("⏳ Exp: ${o['experience_min']} ans", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 12)),
+              Text("⌛ Expire: ${o['date_expiration'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(o['date_expiration'])) : 'N/A'}",
+                style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
             ],
           )
         ],
@@ -302,18 +318,19 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
     );
   }
 
-  Widget _buildInput(TextEditingController controller, String hint, {bool isNumber = false, int maxLines = 1}) {
+  Widget _buildInput(TextEditingController controller, String hint, bool isDark, {bool isNumber = false, int maxLines = 1}) {
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
       maxLines: maxLines,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white30),
+        hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black38),
         filled: true,
-        fillColor: Colors.black26,
+        fillColor: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
       ),
     );
   }
@@ -321,7 +338,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
   void _showLimitDialog() {
     showDialog(context: context, builder: (c) => AlertDialog(
       title: const Text("⚠️ Limite atteinte"),
-      content: const Text("Veuillez activer ένα pack pour publier plus d'offres."),
+      content: const Text("Veuillez activer un pack pour publier plus d'offres."),
       actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
     ));
   }
@@ -329,13 +346,13 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
   void _showDeleteDialog(int id) {
     showDialog(context: context, builder: (c) => AlertDialog(
       title: const Text("Supprimer ?"),
-      content: const Text("Voulez-vous really supprimer cette offre ?"),
+      content: const Text("Voulez-vous vraiment supprimer cette offre ?"),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c), child: const Text("Annuler")),
         TextButton(onPressed: () async {
           final token = await _storage.read(key: 'access');
           await http.delete(Uri.parse('${ApiConfig.baseUrl}/api/offres/$id/'), headers: {"Authorization": "Bearer $token"});
-          Navigator.pop(c);
+          if (mounted) Navigator.pop(c);
           _initData();
         }, child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
       ],

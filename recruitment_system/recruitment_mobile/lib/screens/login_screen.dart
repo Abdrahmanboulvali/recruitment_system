@@ -164,8 +164,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text("Vous n'avez pas de compte ?", style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 14)),
                         GestureDetector(

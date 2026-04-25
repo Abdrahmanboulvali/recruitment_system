@@ -23,7 +23,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool isChangingPassword = false;
   bool showOTPField = false;
 
-  // Controllers
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _otpController = TextEditingController();
@@ -38,6 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _fetchProfile() async {
+    if (!mounted) return;
     setState(() => isLoading = true);
     String? token = await _storage.read(key: 'access');
     try {
@@ -46,16 +46,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         headers: {'Authorization': 'Bearer $token'},
       );
       if (res.statusCode == 200) {
-        setState(() {
-          user = json.decode(utf8.decode(res.bodyBytes));
-          _usernameController.text = user!['username'];
-          _emailController.text = user!['email'];
-        });
+        if (mounted) {
+          setState(() {
+            user = json.decode(utf8.decode(res.bodyBytes));
+            _usernameController.text = user!['username'];
+            _emailController.text = user!['email'];
+          });
+        }
       }
     } catch (e) {
       _showSnackBar("Erreur de connexion");
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -147,18 +149,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showSnackBar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const Scaffold(backgroundColor: ApiConfig.kBgMain, body: Center(child: CircularProgressIndicator()));
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (isLoading) return Scaffold(backgroundColor: theme.scaffoldBackgroundColor, body: const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary)));
 
     return Scaffold(
-      backgroundColor: ApiConfig.kBgMain,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("Mon Profil"),
+        title: Text("Mon Profil", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         actions: [
           TextButton(
             onPressed: () => setState(() {
@@ -176,15 +185,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: ApiConfig.kBgCard,
+            color: theme.cardColor,
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+            boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
           ),
           child: Column(
             children: [
-              _buildAvatarSection(),
+              _buildAvatarSection(isDark),
               const SizedBox(height: 30),
-              if (!isChangingPassword) _buildInfoSection() else _buildPasswordSection(),
+              if (!isChangingPassword) _buildInfoSection(isDark, theme) else _buildPasswordSection(isDark),
             ],
           ),
         ),
@@ -192,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildAvatarSection() {
+  Widget _buildAvatarSection(bool isDark) {
     String? photoUrl = user!['photo'];
     return Center(
       child: Stack(
@@ -234,26 +244,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoSection() {
+  Widget _buildInfoSection(bool isDark, ThemeData theme) {
     return Column(
       children: [
-        _buildInfoCard("Nom d'utilisateur", _usernameController, Icons.person_outline, !isEditing),
+        _buildInfoCard("Nom d'utilisateur", _usernameController, Icons.person_outline, !isEditing, isDark),
         const SizedBox(height: 15),
-        _buildInfoCard("Adresse Email", _emailController, Icons.email_outlined, !isEditing || showOTPField),
+        _buildInfoCard("Adresse Email", _emailController, Icons.email_outlined, !isEditing || showOTPField, isDark),
         if (showOTPField) ...[
           const SizedBox(height: 15),
-          _buildInfoCard("Code OTP", _otpController, Icons.lock_outline, false),
+          _buildInfoCard("Code OTP", _otpController, Icons.lock_outline, false, isDark),
         ],
         const SizedBox(height: 15),
-        _buildRoleBadge(),
+        _buildRoleBadge(isDark),
         const SizedBox(height: 25),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: isEditing ? _saveInfo : () => setState(() => isChangingPassword = true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: isEditing ? ApiConfig.kPrimary : Colors.white.withOpacity(0.05),
+              backgroundColor: isEditing ? ApiConfig.kPrimary : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1)),
               padding: const EdgeInsets.all(16),
+              elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             child: Text(isEditing ? (showOTPField ? "Vérifier OTP" : "Sauvegarder") : "Changer le mot de passe",
@@ -264,20 +275,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildPasswordSection() {
+  Widget _buildPasswordSection(bool isDark) {
     return Column(
       children: [
-        _buildInfoCard("Ancien mot de passe", _oldPassController, Icons.lock_reset, false, isPassword: true),
+        _buildInfoCard("Ancien mot de passe", _oldPassController, Icons.lock_reset, false, isDark, isPassword: true),
         const SizedBox(height: 15),
-        _buildInfoCard("Nouveau mot de passe", _newPassController, Icons.vpn_key_outlined, false, isPassword: true),
+        _buildInfoCard("Nouveau mot de passe", _newPassController, Icons.vpn_key_outlined, false, isDark, isPassword: true),
         const SizedBox(height: 15),
-        _buildInfoCard("Confirmer", _confirmPassController, Icons.check_circle_outline, false, isPassword: true),
+        _buildInfoCard("Confirmer", _confirmPassController, Icons.check_circle_outline, false, isDark, isPassword: true),
         const SizedBox(height: 25),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _updatePassword,
-            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, padding: const EdgeInsets.all(16)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ApiConfig.kPrimary,
+              padding: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
             child: const Text("Mettre à jour le mot de passe", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ),
@@ -285,13 +300,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoCard(String label, TextEditingController controller, IconData icon, bool readOnly, {bool isPassword = false}) {
+  Widget _buildInfoCard(String label, TextEditingController controller, IconData icon, bool readOnly, bool isDark, {bool isPassword = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
+        color: isDark ? Colors.white.withOpacity(0.03) : Colors.grey.withOpacity(0.05),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
       ),
       child: Row(
         children: [
@@ -301,12 +316,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label.toUpperCase(), style: const TextStyle(fontSize: 9, color: Colors.grey, letterSpacing: 1)),
+                Text(label.toUpperCase(), style: TextStyle(fontSize: 9, color: isDark ? Colors.grey : Colors.black54, letterSpacing: 1)),
                 TextField(
                   controller: controller,
                   readOnly: readOnly,
                   obscureText: isPassword,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 15),
                   decoration: const InputDecoration(isDense: true, border: InputBorder.none, contentPadding: EdgeInsets.symmetric(vertical: 5)),
                 ),
               ],
@@ -317,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildRoleBadge() {
+  Widget _buildRoleBadge(bool isDark) {
     return Row(
       children: [
         const Icon(Icons.shield_outlined, color: ApiConfig.kPrimary, size: 20),
@@ -325,7 +340,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("RÔLE DU COMPTE", style: TextStyle(fontSize: 9, color: Colors.grey, letterSpacing: 1)),
+            Text("RÔLE DU COMPTE", style: TextStyle(fontSize: 9, color: isDark ? Colors.grey : Colors.black54, letterSpacing: 1)),
             const SizedBox(height: 5),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
