@@ -138,30 +138,40 @@ class DashboardStatsSerializer(serializers.Serializer):
     offres_analytics = serializers.ListField()
 
 # --- 5. إضافات نظام الاشتراكات والمالية (المحدثة) ---
+# --- 5. إضافات نظام الاشتراكات والمالية (المحدثة للأتمتة) ---
+
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubscriptionPlan
         fields = ['id', 'title', 'price', 'offres_count', 'duration_months', 'description']
 
+
 class PaymentMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentMethod
-        fields = ['id', 'provider_name', 'account_number']
+        # التعديل: أضفنا technical_name لكي يعرف الموبايل أي تطبيق يفتح (bankily, masrvi...)
+        fields = ['id', 'provider_name', 'technical_name', 'account_number', 'account_holder', 'is_active']
+
 
 class SubscriptionRequestSerializer(serializers.ModelSerializer):
-    # استخدام ReadOnlyField لتجنب خطأ 500 في حال كانت العلاقة فارغة
     enterprise_name = serializers.ReadOnlyField(source='enterprise.nom')
     plan_title = serializers.ReadOnlyField(source='plan.title')
+
+    # إضافة تفاصيل وسيلة الدفع لتظهر في تطبيق الموبايل عند الطلب
+    payment_details = PaymentMethodSerializer(source='payment_method', read_only=True)
 
     class Meta:
         model = SubscriptionRequest
         fields = [
             'id', 'enterprise', 'enterprise_name', 'plan', 'plan_title',
+            'payment_method', 'payment_details', 'transaction_ref',  # المرجع الفريد الجديد
             'payment_receipt', 'status', 'date_subscription'
         ]
-        read_only_fields = ['status', 'enterprise', 'date_subscription']
+        # المرجع الفريد (transaction_ref) يجب أن يكون للقراءة فقط لأن السيرفر هو من يولده
+        read_only_fields = ['status', 'enterprise', 'date_subscription', 'transaction_ref']
 
+    # ملاحظة: لم نعد نحتاج لإجبار المستخدم على رفع الوصل (payment_receipt)
+    # لأننا انتقلنا لنظام الأتمتة، لذا يمكن جعلها اختيارية في الـ Validate
     def validate_payment_receipt(self, value):
-        if not value:
-            raise serializers.ValidationError("Vous devez télécharger le reçu de paiement.")
+        # يمكنك ترك هذا الحقل اختيارياً الآن لأن الأتمتة تعتمد على المرجع الرقمي
         return value

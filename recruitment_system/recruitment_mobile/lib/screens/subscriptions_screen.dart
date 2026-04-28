@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../api_config.dart';
 
 class SubscriptionsScreen extends StatefulWidget {
@@ -29,11 +30,60 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     fetchData();
   }
 
-  double _parsePrice(dynamic price) {
-    if (price == null) return 0.0;
-    if (price is num) return price.toDouble();
-    return double.tryParse(price.toString()) ?? 0.0;
+  // --- دوال الأتمتة الجديدة ---
+
+  Future<void> _openBankApp(String techName, String accountNumber, String amount, String reference) async {
+    String url = '';
+    if (techName.toLowerCase().contains('bankily')) {
+      url = "bankily://pay?to=$accountNumber&amount=$amount&note=$reference";
+    } else if (techName.toLowerCase().contains('masrvi')) {
+      url = "masrvi://pay?to=$accountNumber&amount=$amount&note=$reference";
+    }
+
+    if (url.isNotEmpty && await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      _showSnackBar("تطبيق البنك غير مثبت أو لا يدعم الربط المباشر");
+    }
   }
+
+  Future<void> _handleAutoPay(int planId, Map paymentMethod) async {
+    setState(() => loading = true);
+    try {
+      String? token = await _storage.read(key: 'access');
+
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'plan': planId,
+          'payment_method': paymentMethod['id'],
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        final data = json.decode(response.body);
+        final String ref = data['transaction_ref'];
+        final String amount = data['amount'].toString();
+        final String receiver = data['receiver_number'];
+        final String bankTechName = data['bank_technical_name'];
+
+        await _openBankApp(bankTechName, receiver, amount, ref);
+
+        fetchData();
+        _showSnackBar("Redirection vers l'application bancaire...");
+      }
+    } catch (e) {
+      _showSnackBar("Erreur de connexion");
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+  // --- جلب البيانات ---
 
   Future<void> fetchData() async {
     if (!mounted) return;
@@ -64,41 +114,11 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Error: $e");
       if (mounted) setState(() => loading = false);
     }
   }
 
-  Future<void> _pickImage(StateSetter setStateModal) async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setStateModal(() => _receiptFile = File(pickedFile.path));
-    }
-  }
-
-  Future<void> handleSubscribe(int planId) async {
-    if (_receiptFile == null) {
-      _showSnackBar("Veuillez joindre le reçu de paiement");
-      return;
-    }
-
-    try {
-      String? token = await _storage.read(key: 'access');
-      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'));
-      request.headers['Authorization'] = 'Bearer $token';
-      request.fields['plan'] = planId.toString();
-      request.files.add(await http.MultipartFile.fromPath('payment_receipt', _receiptFile!.path));
-
-      var response = await request.send();
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        _showSnackBar("Demande envoyée avec succès !");
-        _receiptFile = null;
-        fetchData();
-      }
-    } catch (e) {
-      _showSnackBar("Erreur lors de l'envoi");
-    }
-  }
+  // --- واجهة العرض الرئيسية ---
 
   @override
   Widget build(BuildContext context) {
@@ -108,34 +128,81 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Plans d'Abonnement",
+        title: Text("Abonnements",
           style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
           : RefreshIndicator(
               onRefresh: fetchData,
-              color: ApiConfig.kPrimary,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text("Gérez votre abonnement et découvrez nos solutions premium.",
+                  Text("Payez instantanément et activez votre pack automatiquement.",
                       textAlign: TextAlign.center,
                       style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
                   const SizedBox(height: 25),
                   if (activeSubscription != null) _buildActiveSubCard(isDark),
                   if (pendingRequests.isNotEmpty) _buildPendingSection(isDark),
-                  _buildPaymentMethods(theme, isDark),
-                  const SizedBox(height: 20),
+
+                  // تم حذف _buildPaymentMethods من هنا لتنظيف الواجهة
+
+                  const SizedBox(height: 10),
                   ...plans.map((plan) => _buildPlanCard(plan, theme, isDark)).toList(),
                 ],
               ),
             ),
     );
   }
+
+  // --- نافذة اختيار الدفع الذكية ---
+
+  void _showPaymentSelection(Map plan, ThemeData theme, bool isDark) {
+    // أتمتة: إذا كان هناك حساب بنكي واحد فقط، ابدأ الدفع فوراً
+    if (accounts.length == 1) {
+      _handleAutoPay(plan['id'], accounts[0]);
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.cardColor,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Mode de paiement", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            ...accounts.map((acc) => ListTile(
+              leading: const Icon(Icons.flash_on, color: Colors.orange),
+              title: Text("Payer via ${acc['provider_name']}"),
+              subtitle: const Text("Paiement automatique sécurisé"),
+              onTap: () {
+                Navigator.pop(context);
+                _handleAutoPay(plan['id'], acc);
+              },
+            )).toList(),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.history_edu, color: Colors.grey),
+              title: const Text("Méthode manuelle (Upload)"),
+              onTap: () {
+                Navigator.pop(context);
+                _showManualUploadSheet(plan, theme, isDark);
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- بقية الـ Widgets المساعدة (نفس تصميمك الأصلي) ---
 
   Widget _buildActiveSubCard(bool isDark) {
     final details = activeSubscription?['plan_details'];
@@ -151,16 +218,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(children: [
-            Icon(Icons.check_circle, color: Colors.green),
+            Icon(Icons.verified, color: Colors.green),
             SizedBox(width: 10),
-            Text("Votre abonnement est actif", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            Text("Abonnement Actif", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
           ]),
-          const SizedBox(height: 15),
+          const SizedBox(height: 10),
           _rowInfo("Pack:", details?['title']?.toString() ?? "N/A", isDark),
-          _rowInfo("Utilisation:", "${details?['current_usage'] ?? 0} / ${details?['offres_count'] ?? 0} offres", isDark),
-          _rowInfo("Expire le:", activeSubscription?['date_expiration'] != null
-              ? DateFormat('dd/MM/yyyy').format(DateTime.parse(activeSubscription!['date_expiration']))
-              : "N/A", isDark),
+          _rowInfo("Usage:", "${details?['current_usage'] ?? 0} / ${details?['offres_count'] ?? 0}", isDark),
         ],
       ),
     );
@@ -179,82 +243,47 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(children: [
-            Icon(Icons.timer_outlined, color: Colors.orange, size: 20),
+            Icon(Icons.hourglass_empty, color: Colors.orange, size: 20),
             SizedBox(width: 8),
-            Text("Demandes en attente", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+            Text("En attente de confirmation", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
           ]),
-          const SizedBox(height: 10),
           ...pendingRequests.map((req) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(req['plan_details']?['title']?.toString() ?? "Plan",
-              style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14)),
-            subtitle: const Text("Vérification du paiement...", style: TextStyle(color: Colors.orange, fontSize: 11)),
+            dense: true,
+            title: Text("Ref: ${req['transaction_ref']}", style: const TextStyle(fontSize: 12)),
+            trailing: const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)),
           )).toList(),
         ],
       ),
     );
   }
 
-  Widget _buildPaymentMethods(ThemeData theme, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
-      ),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: accounts.map((acc) => Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            border: Border.all(color: ApiConfig.kPrimary.withOpacity(0.5)),
-            borderRadius: BorderRadius.circular(10)),
-          child: Text("${acc['provider_name']}: ${acc['account_number']}",
-            style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
-        )).toList(),
-      ),
-    );
-  }
-
   Widget _buildPlanCard(Map plan, ThemeData theme, bool isDark) {
     bool isCurrent = activeSubscription != null && activeSubscription!['plan'] == plan['id'];
-    double priceValue = _parsePrice(plan['price']);
-
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.all(25),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isCurrent ? Colors.green : ApiConfig.kPrimary, width: 2),
-        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        border: Border.all(color: isCurrent ? Colors.green : ApiConfig.kPrimary.withOpacity(0.2)),
       ),
       child: Column(
         children: [
-          if (isCurrent) const Align(alignment: Alignment.topRight, child: Badge(label: Text("ACTUEL"), backgroundColor: Colors.green)),
-          Icon(priceValue > 1000 ? Icons.bolt : Icons.star, color: priceValue > 1000 ? Colors.orange : ApiConfig.kPrimary, size: 40),
-          const SizedBox(height: 10),
-          Text(plan['title']?.toString() ?? "",
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-          const SizedBox(height: 10),
-          Text("${plan['price']} MRU", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
-          Divider(color: isDark ? Colors.white10 : Colors.black12, height: 30),
+          Text(plan['title']?.toString() ?? "", style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+          Text("${plan['price']} MRU", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
+          const Divider(height: 25),
           _featureRow("${plan['offres_count']} Offres", isDark),
-          _featureRow("Validité: ${plan['duration_months']} mois", isDark),
-          const SizedBox(height: 20),
+          const SizedBox(height: 15),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: isCurrent ? Colors.green : ApiConfig.kPrimary,
-                foregroundColor: Colors.white,
+                backgroundColor: ApiConfig.kPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 15),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
-              onPressed: () => _showUploadSheet(plan, theme, isDark),
-              child: Text(isCurrent ? "Renouveler" : "Choisir ce plan", style: const TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _showPaymentSelection(plan, theme, isDark),
+              child: const Text("S'abonner", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -262,49 +291,33 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  void _showUploadSheet(Map plan, ThemeData theme, bool isDark) {
+  // --- الدوال اليدوية المتبقية ---
+
+  void _showManualUploadSheet(Map plan, ThemeData theme, bool isDark) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: theme.cardColor,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Confirmer: ${plan['title']}",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-              const SizedBox(height: 20),
+              const Text("Preuve de paiement"),
+              const SizedBox(height: 15),
               GestureDetector(
                 onTap: () => _pickImage(setModalState),
                 child: Container(
-                  height: 150,
+                  height: 100,
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.black12 : Colors.grey.withOpacity(0.05),
-                    border: Border.all(color: ApiConfig.kPrimary, style: BorderStyle.solid),
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: _receiptFile == null
-                    ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        const Icon(Icons.upload_file, size: 40, color: ApiConfig.kPrimary),
-                        Text("Cliquez pour joindre le reçu", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))
-                      ])
-                    : ClipRRect(borderRadius: BorderRadius.circular(15), child: Image.file(_receiptFile!, fit: BoxFit.cover)),
+                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10)),
+                  child: _receiptFile == null ? const Icon(Icons.add_a_photo) : Image.file(_receiptFile!, fit: BoxFit.cover),
                 ),
               ),
+              const SizedBox(height: 15),
+              ElevatedButton(onPressed: () { handleManualUpload(plan['id']); Navigator.pop(context); }, child: const Text("Envoyer")),
               const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 50)),
-                onPressed: () {
-                  handleSubscribe(plan['id']);
-                  Navigator.pop(context);
-                },
-                child: const Text("Envoyer la preuve", style: TextStyle(fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -312,31 +325,41 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
+  Future<void> handleManualUpload(int planId) async {
+    if (_receiptFile == null) return;
+    try {
+      String? token = await _storage.read(key: 'access');
+      var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'));
+      request.headers['Authorization'] = 'Bearer $token';
+      request.fields['plan'] = planId.toString();
+      request.files.add(await http.MultipartFile.fromPath('payment_receipt', _receiptFile!.path));
+      var res = await request.send();
+      if (res.statusCode == 201) { fetchData(); _showSnackBar("Reçu envoyé !"); }
+    } catch (e) { _showSnackBar("Erreur"); }
+  }
+
+  Future<void> _pickImage(StateSetter setStateModal) async {
+    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) setStateModal(() => _receiptFile = File(pickedFile.path));
+  }
+
   Widget _rowInfo(String label, String value, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [
-        Text(label, style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
-        const SizedBox(width: 5),
-        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87))
-      ]),
-    );
+    return Row(children: [
+      Text(label, style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13)),
+      const SizedBox(width: 5),
+      Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+    ]);
   }
 
   Widget _featureRow(String text, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [
-        const Icon(Icons.check_circle, color: Colors.green, size: 18),
-        const SizedBox(width: 10),
-        Text(text, style: TextStyle(color: isDark ? Colors.white : Colors.black87))
-      ]),
-    );
+    return Row(children: [
+      const Icon(Icons.check, color: Colors.green, size: 16),
+      const SizedBox(width: 10),
+      Text(text, style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontSize: 14)),
+    ]);
   }
 
   void _showSnackBar(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    }
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }

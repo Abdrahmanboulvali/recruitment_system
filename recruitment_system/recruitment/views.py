@@ -799,9 +799,24 @@ class SubscriptionRequestViewSet(viewsets.ModelViewSet):
             return SubscriptionRequest.objects.all()
         return SubscriptionRequest.objects.filter(enterprise=user.enterprise)
 
-    def perform_create(self, serializer):
-        serializer.save(enterprise=self.request.user.enterprise, status='PENDING')
+    def create(self, request, *args, **kwargs):
+        # عندما يطلب المستخدم اشتراكاً، ننشئ الطلب ونعيد له بيانات الدفع التلقائي
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
+        # حفظ الطلب (سيقوم الـ Model بتوليد transaction_ref تلقائياً كما فعلنا سابقاً)
+        subscription = serializer.save(enterprise=self.request.user.enterprise, status='PENDING')
+
+        # جلب بيانات الدفع المختارة (بنكيلي مثلاً)
+        payment_method = subscription.payment_method
+
+        return Response({
+            "message": "PENDING_PAYMENT",
+            "transaction_ref": subscription.transaction_ref,
+            "amount": subscription.plan.price,
+            "receiver_number": payment_method.account_number,
+            "bank_technical_name": payment_method.technical_name,  # هنا سيعرف الموبايل ماذا يفتح
+        }, status=status.HTTP_201_CREATED)
 
 # 4. الـ View الذي تسبب في الخطأ (AdminSubscriptionListView)
 class AdminSubscriptionListView(generics.ListAPIView):
@@ -926,3 +941,34 @@ class MySubscriptionView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=500)
+
+
+# أضف هذه الدالة في نهاية ملف views.py
+@api_view(['POST'])
+@permission_classes([AllowAny])  # الجسر سيخاطب السيرفر مباشرة
+def auto_verify_payment(request):
+    """
+    هذه الدالة تستقبل المرجع الفريد من 'الجسر' وتفعل الاشتراك تلقائياً
+    """
+    # الكود المرجعي المستخرج من رسالة البنك (مثال: REC-A1B2C3)
+    ref_from_sms = request.data.get('transaction_ref')
+
+    try:
+        # البحث عن طلب الاشتراك الذي يحمل هذا المرجع
+        subscription = SubscriptionRequest.objects.get(transaction_ref=ref_from_sms, status='PENDING')
+
+        # 1. تفعيل الاشتراك
+        subscription.status = 'ACTIVE'
+        subscription.save()
+
+        # 2. تفعيل المؤسسة وربطها بالباقة
+        enterprise = subscription.enterprise
+        enterprise.current_plan = subscription.plan
+        enterprise.is_approved = True
+        enterprise.save()
+
+        print(f"SUCCESS: Subscription {ref_from_sms} activated automatically.")
+        return Response({"status": "Success", "message": "Subscription activated"}, status=200)
+
+    except SubscriptionRequest.DoesNotExist:
+        return Response({"status": "Error", "message": "Invalid reference"}, status=404)

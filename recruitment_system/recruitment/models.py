@@ -20,10 +20,14 @@ class SubscriptionPlan(models.Model):
 
 
 class PaymentMethod(models.Model):
-    """ الحسابات البنكية للاستلام (Bankily, Masrvi...) """
-    provider_name = models.CharField(max_length=100)
-    account_number = models.CharField(max_length=50)
-    # التعديل هنا: جعل الحقل اختيارياً
+    """ الحسابات البنكية للاستلام يحددها المدير العام """
+    provider_name = models.CharField(max_length=100)  # الاسم الظاهر (مثلاً: بنكيلي - إدارة النظام)
+
+    # هذا الحقل مهم للمبرمج: المدير يكتب فيه 'bankily' أو 'masrvi'
+    # لكي يعرف تطبيق الموبايل أي رابط (URI Scheme) يفتح
+    technical_name = models.SlugField(max_length=50, help_text="Exemple: bankily ou masrvi (Aucun espace)")
+
+    account_number = models.CharField(max_length=50)  # الرقم المستلم
     account_holder = models.CharField(max_length=150, blank=True, null=True)
     is_active = models.BooleanField(default=True)
 
@@ -153,6 +157,9 @@ class AgentRH(models.Model):
 
 # --- 5. طلبات الاشتراك والتحقق المالي ---
 
+import uuid
+
+
 class SubscriptionRequest(models.Model):
     STATUS_CHOICES = [
         ('PENDING', 'En attente de validation'),
@@ -163,9 +170,22 @@ class SubscriptionRequest(models.Model):
     enterprise = models.ForeignKey(Enterprise, on_delete=models.CASCADE, related_name='subscription_requests')
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+
+    # المرجع الفريد للأتمتة (يظهر للمستخدم ليضعه في ملاحظات الدفع)
+    transaction_ref = models.CharField(max_length=50, unique=True, editable=False, null=True)
+
+    # ربط الطلب بالوسيلة التي اختارها المدير
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, blank=True)
+
     payment_receipt = models.ImageField(upload_to='receipts/', null=True, blank=True)
     date_subscription = models.DateTimeField(auto_now_add=True)
     expiry_date = models.DateTimeField(null=True, blank=True)
 
+    def save(self, *args, **kwargs):
+        if not self.transaction_ref:
+            # توليد كود قصير وسهل القراءة للمستخدم الموريتاني
+            self.transaction_ref = f"REC-{uuid.uuid4().hex[:6].upper()}"
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.enterprise.nom} - {self.plan.title}"
+        return f"{self.enterprise.nom} - {self.transaction_ref}"
