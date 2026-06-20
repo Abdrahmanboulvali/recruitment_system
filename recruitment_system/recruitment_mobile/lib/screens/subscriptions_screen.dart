@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // ضروري لعملية النسخ التلقائي
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_config.dart';
 
@@ -24,34 +24,84 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   bool loading = true;
   File? _receiptFile;
 
+  // وحدات التحكم لنظام B-Pay
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passcodeController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     fetchData();
   }
 
-  // --- دوال الأتمتة الجديدة ---
+  // --- واجهة إدخال بيانات B-Pay الجديدة ---
 
-  Future<void> _openBankApp(String techName, String accountNumber, String amount, String reference) async {
-    String url = '';
-    if (techName.toLowerCase().contains('bankily')) {
-      url = "bankily://pay?to=$accountNumber&amount=$amount&note=$reference";
-    } else if (techName.toLowerCase().contains('masrvi')) {
-      url = "masrvi://pay?to=$accountNumber&amount=$amount&note=$reference";
-    }
-
-    if (url.isNotEmpty && await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      _showSnackBar("تطبيق البنك غير مثبت أو لا يدعم الربط المباشر");
-    }
+  void _showBPayDialog(Map plan, Map account, String currentLang) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          currentLang == 'ar' ? "دفع عبر بي-باي (B-Pay)" : "Paiement B-Pay",
+          style: const TextStyle(fontWeight: FontWeight.bold)
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "${currentLang == 'ar' ? 'المبلغ: ' : 'Montant: '}${plan['price']} MRU",
+              style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: currentLang == 'ar' ? "رقم بنكيلي" : "Numéro Bankily",
+                hintText: currentLang == 'ar' ? "مثال: 4xxxxxxx" : "Ex: 4xxxxxxx",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _passcodeController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: currentLang == 'ar' ? "رمز السري لـ B-Pay" : "Passcode B-Pay",
+                hintText: currentLang == 'ar' ? "رمز مكون من 4-6 أرقام" : "Code à 4-6 chiffres",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(currentLang == 'ar' ? "إلغاء" : "Annuler", style: const TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _handleBPaySubmit(plan['id'], account['id'], currentLang);
+            },
+            child: Text(currentLang == 'ar' ? "تأكيد" : "Confirmer", style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
-  Future<void> _handleAutoPay(int planId, Map paymentMethod) async {
+  Future<void> _handleBPaySubmit(int planId, int methodId, String currentLang) async {
+    if (_phoneController.text.isEmpty || _passcodeController.text.isEmpty) {
+      _showSnackBar(currentLang == 'ar' ? "يرجى ملء جميع الحقول" : "Veuillez remplir tous les champs");
+      return;
+    }
+
     setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
-
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'),
         headers: {
@@ -60,42 +110,142 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         },
         body: json.encode({
           'plan': planId,
-          'payment_method': paymentMethod['id'],
+          'payment_method': methodId,
+          'is_bpay': true, // إشارة للباكيند لمعالجة الطلب تلقائياً
+          'client_phone': _phoneController.text.trim(),
+          'passcode': _passcodeController.text.trim(),
         }),
       );
 
       if (response.statusCode == 201) {
-        final data = json.decode(response.body);
-        final String ref = data['transaction_ref'];
-        final String amount = data['amount'].toString();
-        final String receiver = data['receiver_number'];
-        final String bankTechName = data['bank_technical_name'];
+        _showSnackBar(currentLang == 'ar' ? "تم تفعيل الاشتراك بنجاح!" : "Abonnement activé avec succès !");
 
-        await _openBankApp(bankTechName, receiver, amount, ref);
+        _phoneController.clear();
+        _passcodeController.clear();
 
         fetchData();
-        _showSnackBar("Redirection vers l'application bancaire...");
+      } else {
+        final data = json.decode(utf8.decode(response.bodyBytes));
+        _showSnackBar(data['detail'] ?? (currentLang == 'ar' ? "فشلت عملية الدفع" : "Erreur de paiement"));
       }
     } catch (e) {
-      _showSnackBar("Erreur de connexion");
+      _showSnackBar(currentLang == 'ar' ? "خطأ في الاتصال بالشبكة" : "Erreur de connexion");
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
-  // --- جلب البيانات ---
+  // --- واجهة تأكيد فتح تطبيقات البنوك الأخرى ---
+
+  Future<void> _confirmAndOpenBank(String techName, String receiver, String amount, String ref, String currentLang) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          "${currentLang == 'ar' ? 'الدفع عبر ' : 'Paiement via '}$techName",
+          style: const TextStyle(fontWeight: FontWeight.bold)
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              currentLang == 'ar'
+                  ? "هل تريد فتح تطبيق $techName لدفع $amount أوقية جديدة؟"
+                  : "Voulez-vous ouvrir $techName pour payer $amount MRU ?",
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "${currentLang == 'ar' ? 'الرقم المرجعي: ' : 'Référence: '}$ref",
+              style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(currentLang == 'ar' ? "إلغاء" : "Annuler", style: const TextStyle(color: Colors.red))
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openBankApp(techName, receiver, amount, ref, currentLang);
+            },
+            child: Text(currentLang == 'ar' ? "فتح" : "Ouvrir", style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openBankApp(String techName, String accountNumber, String amount, String reference, String currentLang) async {
+    final String key = techName.toLowerCase().trim();
+    String package = key.contains('bankily') ? "com.bim.bankily" :
+                     key.contains('masrvi') ? "com.mauripost.masrvi" : "com.bms.sedad";
+
+    try {
+      await Clipboard.setData(ClipboardData(text: reference));
+      final String intentUrl = "intent:#Intent;package=$package;end";
+      bool launched = await launchUrl(Uri.parse(intentUrl), mode: LaunchMode.externalApplication);
+
+      if (launched) {
+        _showSnackBar(currentLang == 'ar' ? "تم فتح التطبيق ونسخ الرقم المرجعي للعملية!" : "Application ouverte. Référence copiée !");
+      } else {
+        _showSnackBar(currentLang == 'ar' ? "لم يتم العثور على التطبيق المثبت." : "Application non trouvée.");
+      }
+    } catch (e) {
+      _showSnackBar(currentLang == 'ar' ? "يرجى فتح التطبيق يدوياً." : "Veuillez ouvrir l'application manuellement.");
+    }
+  }
+
+  // --- معالجة الدفع التلقائي للبنوك الأخرى ---
+
+  Future<void> _handleAutoPay(int planId, Map paymentMethod, String currentLang) async {
+    setState(() => loading = true);
+    try {
+      String? token = await _storage.read(key: 'access');
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'),
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: json.encode({'plan': planId, 'payment_method': paymentMethod['id']}),
+      );
+
+      final responseData = json.decode(utf8.decode(response.bodyBytes));
+
+      if (response.statusCode == 201) {
+        _confirmAndOpenBank(
+          responseData['bank_technical_name']?.toString() ?? "",
+          responseData['receiver_number']?.toString() ?? "",
+          responseData['amount']?.toString() ?? "0",
+          responseData['transaction_ref']?.toString() ?? "",
+          currentLang
+        );
+        fetchData();
+      } else {
+        _showSnackBar(responseData['detail'] ?? (currentLang == 'ar' ? "حدث خطأ" : "Erreur"));
+      }
+    } catch (e) {
+      _showSnackBar(currentLang == 'ar' ? "خطأ في الاتصال" : "Erreur de connexion");
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  // --- جلب البيانات وبناء الواجهة ---
 
   Future<void> fetchData() async {
     if (!mounted) return;
     setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
-      final config = {'Authorization': 'Bearer $token'};
-
+      final headers = {'Authorization': 'Bearer $token'};
       final results = await Future.wait([
-        http.get(Uri.parse('${ApiConfig.baseUrl}/api/subscription-plans/'), headers: config),
-        http.get(Uri.parse('${ApiConfig.baseUrl}/api/payment-methods/'), headers: config),
-        http.get(Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'), headers: config),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/subscription-plans/'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/payment-methods/'), headers: headers),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'), headers: headers),
       ]);
 
       if (mounted) {
@@ -103,12 +253,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           plans = json.decode(utf8.decode(results[0].bodyBytes));
           accounts = json.decode(utf8.decode(results[1].bodyBytes));
           List allSubs = json.decode(utf8.decode(results[2].bodyBytes));
-
-          activeSubscription = allSubs.cast<Map<String, dynamic>?>().firstWhere(
-            (req) => req?['status'] == 'ACTIVE',
-            orElse: () => null,
-          );
-
+          activeSubscription = allSubs.cast<Map<String, dynamic>?>().firstWhere((req) => req?['status'] == 'ACTIVE', orElse: () => null);
           pendingRequests = allSubs.where((req) => req['status'] == 'PENDING').toList();
           loading = false;
         });
@@ -118,20 +263,18 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
-  // --- واجهة العرض الرئيسية ---
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final currentLang = Localizations.localeOf(context).languageCode;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Abonnements",
-          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+        title: Text(
+          currentLang == 'ar' ? "الاشتراكات وباقات الدفع" : "Abonnements",
+          style: const TextStyle(fontWeight: FontWeight.bold)
+        )
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
@@ -140,32 +283,62 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  Text("Payez instantanément et activez votre pack automatiquement.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)),
-                  const SizedBox(height: 25),
-                  if (activeSubscription != null) _buildActiveSubCard(isDark),
-                  if (pendingRequests.isNotEmpty) _buildPendingSection(isDark),
+                  if (activeSubscription != null) _buildActiveSubCard(currentLang),
+                  if (accounts.isNotEmpty) _buildPaymentMethodsGrid(currentLang),
+                  if (pendingRequests.isNotEmpty) _buildPendingSection(currentLang),
 
-                  // تم حذف _buildPaymentMethods من هنا لتنظيف الواجهة
-
-                  const SizedBox(height: 10),
-                  ...plans.map((plan) => _buildPlanCard(plan, theme, isDark)).toList(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Text(
+                      currentLang == 'ar' ? "الباقات المتاحة" : "Forfaits disponibles",
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ...plans.map((plan) => _buildPlanCard(plan, theme, currentLang)).toList(),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
     );
   }
 
-  // --- نافذة اختيار الدفع الذكية ---
+  Widget _buildPaymentMethodsGrid(String currentLang) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(currentLang == 'ar' ? "وسائل الدفع" : "Moyens de paiement", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: accounts.length,
+            itemBuilder: (context, index) {
+              final acc = accounts[index];
+              return Container(
+                width: 160,
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: ApiConfig.kPrimary.withOpacity(0.3)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)]),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.account_balance_wallet, color: ApiConfig.kPrimary),
+                    const SizedBox(height: 5),
+                    Text(acc['provider_name'] ?? "", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(acc['account_number'] ?? "", style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
 
-  void _showPaymentSelection(Map plan, ThemeData theme, bool isDark) {
-    // أتمتة: إذا كان هناك حساب بنكي واحد فقط، ابدأ الدفع فوراً
-    if (accounts.length == 1) {
-      _handleAutoPay(plan['id'], accounts[0]);
-      return;
-    }
-
+  void _showPaymentSelection(Map plan, ThemeData theme, String currentLang) {
     showModalBottomSheet(
       context: context,
       backgroundColor: theme.cardColor,
@@ -175,148 +348,174 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Mode de paiement", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            ...accounts.map((acc) => ListTile(
-              leading: const Icon(Icons.flash_on, color: Colors.orange),
-              title: Text("Payer via ${acc['provider_name']}"),
-              subtitle: const Text("Paiement automatique sécurisé"),
-              onTap: () {
-                Navigator.pop(context);
-                _handleAutoPay(plan['id'], acc);
-              },
-            )).toList(),
+            Text(
+              currentLang == 'ar' ? "اختر طريقة الدفع" : "Mode de paiement",
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+            ),
+            const SizedBox(height: 15),
+            ...accounts.map((acc) {
+              final String techName = (acc['technical_name'] ?? '').toString().toLowerCase();
+              final String providerName = (acc['provider_name'] ?? '').toString().toLowerCase();
+
+              return ListTile(
+                leading: const Icon(Icons.flash_on, color: Colors.orange),
+                title: Text(currentLang == 'ar' ? "الدفع بواسطة ${acc['provider_name']}" : "Payer via ${acc['provider_name']}"),
+                onTap: () {
+                  Navigator.pop(context);
+                  if (techName.contains('bankily') || techName.contains('bpay') || providerName.contains('bankily')) {
+                    _showBPayDialog(plan, acc, currentLang);
+                  } else {
+                    _handleAutoPay(plan['id'], acc, currentLang);
+                  }
+                },
+              );
+            }).toList(),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.history_edu, color: Colors.grey),
-              title: const Text("Méthode manuelle (Upload)"),
+              leading: const Icon(Icons.upload_file),
+              title: Text(currentLang == 'ar' ? "طريقة يدوية (رفع الإيصال)" : "Méthode manuelle (Upload)"),
               onTap: () {
                 Navigator.pop(context);
-                _showManualUploadSheet(plan, theme, isDark);
+                _showManualUploadSheet(plan, theme, currentLang);
               },
             ),
-            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  // --- بقية الـ Widgets المساعدة (نفس تصميمك الأصلي) ---
+  Widget _buildPlanCard(Map plan, ThemeData theme, String currentLang) {
+    return Card(
+      elevation: 3,
+      margin: const EdgeInsets.only(bottom: 15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(plan['title'] ?? "", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: ApiConfig.kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  child: Text("${plan['price']} MRU", style: const TextStyle(fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
+                )
+              ],
+            ),
+            const SizedBox(height: 15),
 
-  Widget _buildActiveSubCard(bool isDark) {
+            // --- التعديل المطبق: استخدام المفاتيح الصحيحة كما في الويب ---
+            Row(
+              children: [
+                Icon(Icons.layers_outlined, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 5),
+                Text("${plan['offres_count'] ?? 0} ${currentLang == 'ar' ? 'عرض' : 'Offres'}", style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+                const SizedBox(width: 20),
+                Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 5),
+                Text("${plan['duration_months'] ?? 0} ${currentLang == 'ar' ? 'شهر' : 'mois'}", style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+              ],
+            ),
+            const SizedBox(height: 15),
+
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), minimumSize: const Size(double.infinity, 45)),
+              onPressed: () => _showPaymentSelection(plan, theme, currentLang),
+              child: Text(currentLang == 'ar' ? "اشترك الآن" : "S'abonner", style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveSubCard(String currentLang) {
     final details = activeSubscription?['plan_details'];
+    final String planTitle = details?['title'] ?? activeSubscription?['plan']?.toString() ?? (currentLang == 'ar' ? "اشتراك نشط" : "Abonnement Actif");
+
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.green.shade400, Colors.green.shade700]), borderRadius: BorderRadius.circular(20)),
+      child: Row(
         children: [
-          const Row(children: [
-            Icon(Icons.verified, color: Colors.green),
-            SizedBox(width: 10),
-            Text("Abonnement Actif", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-          ]),
-          const SizedBox(height: 10),
-          _rowInfo("Pack:", details?['title']?.toString() ?? "N/A", isDark),
-          _rowInfo("Usage:", "${details?['current_usage'] ?? 0} / ${details?['offres_count'] ?? 0}", isDark),
+          const Icon(Icons.check_circle_outline, color: Colors.white, size: 40),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(currentLang == 'ar' ? "اشتراكك نشط" : "Abonnement actif", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+              Text(planTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+            ],
+          )
         ],
       ),
     );
   }
 
-  Widget _buildPendingSection(bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 25),
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.orange.withOpacity(0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(children: [
-            Icon(Icons.hourglass_empty, color: Colors.orange, size: 20),
-            SizedBox(width: 8),
-            Text("En attente de confirmation", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-          ]),
-          ...pendingRequests.map((req) => ListTile(
-            dense: true,
-            title: Text("Ref: ${req['transaction_ref']}", style: const TextStyle(fontSize: 12)),
-            trailing: const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)),
-          )).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlanCard(Map plan, ThemeData theme, bool isDark) {
-    bool isCurrent = activeSubscription != null && activeSubscription!['plan'] == plan['id'];
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isCurrent ? Colors.green : ApiConfig.kPrimary.withOpacity(0.2)),
-      ),
-      child: Column(
-        children: [
-          Text(plan['title']?.toString() ?? "", style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-          Text("${plan['price']} MRU", style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
-          const Divider(height: 25),
-          _featureRow("${plan['offres_count']} Offres", isDark),
-          const SizedBox(height: 15),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ApiConfig.kPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(vertical: 14),
+  Widget _buildPendingSection(String currentLang) {
+    return Column(
+      children: pendingRequests.map((req) => Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange)),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                "${currentLang == 'ar' ? 'في انتظار التأكيد للرقم: ' : 'Attente confirmation: '}${req['transaction_ref']}",
+                style: const TextStyle(color: Colors.orange, fontSize: 11),
+                overflow: TextOverflow.ellipsis,
               ),
-              onPressed: () => _showPaymentSelection(plan, theme, isDark),
-              child: const Text("S'abonner", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: 10),
+            const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)),
+          ],
+        ),
+      )).toList(),
     );
   }
 
-  // --- الدوال اليدوية المتبقية ---
-
-  void _showManualUploadSheet(Map plan, ThemeData theme, bool isDark) {
+  void _showManualUploadSheet(Map plan, ThemeData theme, String currentLang) {
+    _receiptFile = null;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: theme.cardColor,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 20, right: 20, top: 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("Preuve de paiement"),
+              Text(
+                currentLang == 'ar' ? "إرفاق إثبات الدفع" : "Preuve de paiement",
+                style: const TextStyle(fontWeight: FontWeight.bold)
+              ),
               const SizedBox(height: 15),
               GestureDetector(
-                onTap: () => _pickImage(setModalState),
+                onTap: () async {
+                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                  if (picked != null) setModalState(() => _receiptFile = File(picked.path));
+                },
                 child: Container(
-                  height: 100,
-                  width: double.infinity,
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(10)),
-                  child: _receiptFile == null ? const Icon(Icons.add_a_photo) : Image.file(_receiptFile!, fit: BoxFit.cover),
+                  height: 120, width: double.infinity,
+                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(15)),
+                  child: _receiptFile == null ? const Icon(Icons.add_a_photo) : Image.file(_receiptFile!, fit: BoxFit.contain),
                 ),
               ),
               const SizedBox(height: 15),
-              ElevatedButton(onPressed: () { handleManualUpload(plan['id']); Navigator.pop(context); }, child: const Text("Envoyer")),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, minimumSize: const Size(double.infinity, 45)),
+                onPressed: () {
+                  handleManualUpload(plan['id'], currentLang);
+                  Navigator.pop(context);
+                },
+                child: Text(currentLang == 'ar' ? "إرسال الإيصال" : "Envoyer", style: const TextStyle(color: Colors.white)),
+              ),
               const SizedBox(height: 20),
             ],
           ),
@@ -325,8 +524,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  Future<void> handleManualUpload(int planId) async {
+  Future<void> handleManualUpload(int planId, String currentLang) async {
     if (_receiptFile == null) return;
+    setState(() => loading = true);
     try {
       String? token = await _storage.read(key: 'access');
       var request = http.MultipartRequest('POST', Uri.parse('${ApiConfig.baseUrl}/api/subscriptions/'));
@@ -334,29 +534,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       request.fields['plan'] = planId.toString();
       request.files.add(await http.MultipartFile.fromPath('payment_receipt', _receiptFile!.path));
       var res = await request.send();
-      if (res.statusCode == 201) { fetchData(); _showSnackBar("Reçu envoyé !"); }
-    } catch (e) { _showSnackBar("Erreur"); }
-  }
-
-  Future<void> _pickImage(StateSetter setStateModal) async {
-    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) setStateModal(() => _receiptFile = File(pickedFile.path));
-  }
-
-  Widget _rowInfo(String label, String value, bool isDark) {
-    return Row(children: [
-      Text(label, style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13)),
-      const SizedBox(width: 5),
-      Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-    ]);
-  }
-
-  Widget _featureRow(String text, bool isDark) {
-    return Row(children: [
-      const Icon(Icons.check, color: Colors.green, size: 16),
-      const SizedBox(width: 10),
-      Text(text, style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, fontSize: 14)),
-    ]);
+      if (res.statusCode == 201) {
+        fetchData();
+        _showSnackBar(currentLang == 'ar' ? "تم إرسال إيصال الدفع بنجاح!" : "Reçu envoyé !");
+      }
+    } catch (e) {
+      _showSnackBar(currentLang == 'ar' ? "حدث خطأ أثناء إرسال الإيصال" : "Erreur lors de l'envoi");
+    } finally {
+      setState(() => loading = false);
+    }
   }
 
   void _showSnackBar(String msg) {

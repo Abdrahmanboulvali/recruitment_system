@@ -153,23 +153,20 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
         fields = ['id', 'provider_name', 'technical_name', 'account_number', 'account_holder', 'is_active']
 
 
+# تأكد من استيراد الـ PlanSerializer (أو تعريف الكلاس الخاص بالخطة)
 class SubscriptionRequestSerializer(serializers.ModelSerializer):
-    enterprise_name = serializers.ReadOnlyField(source='enterprise.nom')
-    plan_title = serializers.ReadOnlyField(source='plan.title')
-
-    # إضافة تفاصيل وسيلة الدفع لتظهر في تطبيق الموبايل عند الطلب
+    # نرسل تفاصيل الخطة ككائن كامل ليتوافق مع الفرونت إيند
+    plan_details = SubscriptionPlanSerializer(source='plan', read_only=True)
     payment_details = PaymentMethodSerializer(source='payment_method', read_only=True)
 
     class Meta:
         model = SubscriptionRequest
         fields = [
-            'id', 'enterprise', 'enterprise_name', 'plan', 'plan_title',
-            'payment_method', 'payment_details', 'transaction_ref',  # المرجع الفريد الجديد
-            'payment_receipt', 'status', 'date_subscription'
+            'id', 'enterprise', 'plan', 'plan_details',  # أضفنا plan_details
+            'payment_method', 'payment_details', 'date_expiration',  # تأكد من إضافة date_expiration هنا
+            'status', 'date_subscription'
         ]
-        # المرجع الفريد (transaction_ref) يجب أن يكون للقراءة فقط لأن السيرفر هو من يولده
-        read_only_fields = ['status', 'enterprise', 'date_subscription', 'transaction_ref']
-
+        read_only_fields = ['status', 'enterprise', 'date_subscription']
     # ملاحظة: لم نعد نحتاج لإجبار المستخدم على رفع الوصل (payment_receipt)
     # لأننا انتقلنا لنظام الأتمتة، لذا يمكن جعلها اختيارية في الـ Validate
     def validate_payment_receipt(self, value):

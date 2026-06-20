@@ -1,0 +1,17 @@
+{
+  "connexion": "Login",
+  "emailHint": "Email",
+  "passwordHint": "Password",
+  "forgotPassword": "Forgot Password?",
+  "loginSuccess": "Login Successful",
+  "dashboard": "Dashboard",
+  "subscriptions": "Subscriptions",
+  "gestionOffres": "Job Management",
+  "candidatures": "Applications",
+  "monEntreprise": "My Company",
+  "usersSystem": "Users System",
+  "monProfil": "My Profile",
+  "deconnexion": "Logout",
+  "visualisationData": "Data Visualization",
+  "dernieresActivites": "Recent Activities"
+}

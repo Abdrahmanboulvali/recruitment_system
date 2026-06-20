@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const AddAgent = () => {
     const [formData, setFormData] = useState({
-        username: '', //
+        username: '',
         email: '',
         password: '',
         departement: ''
@@ -24,23 +24,26 @@ const AddAgent = () => {
                 }
             });
             setMessage('Le compte agent a été créé avec succès!');
-            // تأكد من تفريغ الـ username أيضاً هنا
             setFormData({ username: '', email: '', password: '', departement: '' });
         } catch (error) {
-            setMessage('Erreur : Vérifiez les autorisations de l\'administrateur ou l\'exactitude des données.');
+            if (error.response && error.response.data && error.response.data.email) {
+                setMessage('Erreur : ' + error.response.data.email[0]);
+            } else {
+                setMessage('Erreur : Vérifiez les autorisations de l\'administrateur ou l\'exactitude des données.');
+            }
         }
     };
 
     return (
-        <div style={{ padding: '40px', maxWidth: '500px', margin: 'auto', color: '#f8fafc' }}>
-            <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>Ajouter un Nouvel Agent RH</h2>
+        <div style={{ padding: '40px', maxWidth: '500px', margin: 'auto', color: 'inherit' }}>
+            <h2 style={{ textAlign: 'center', marginBottom: '30px', color: 'inherit' }}>Ajouter un Nouvel Agent RH</h2>
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 <input
                     type="text"
                     name="username"
                     placeholder="Nom d'utilisateur (Username)"
-                    value={formData.username} // إضافة الربط مع الحالة
-                    style={inputStyle} // تصحيح اسم التنسيق من styles.input إلى inputStyle
+                    value={formData.username}
+                    style={inputStyle}
                     onChange={handleChange}
                     required
                 />
@@ -66,13 +69,13 @@ const AddAgent = () => {
     );
 };
 
-// التنسيقات (تأكد أنها مطابقة للمستخدم في الأعلى)
+// التنسيقات المعدلة لتكون متوافقة مع كلا الوضعين
 const inputStyle = {
     padding: '12px',
     borderRadius: '8px',
-    border: '1px solid rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    color: 'white'
+    border: '1px solid rgba(128, 128, 128, 0.2)', // تم تعديل الحدود لتكون أوضح في الوضع الفاتح
+    backgroundColor: 'rgba(128, 128, 128, 0.05)',
+    color: 'inherit' // سيأخذ اللون تلقائياً حسب الوضع
 };
 
 const buttonStyle = {

@@ -12,7 +12,7 @@ from .views import (
     # Admin & Users
     UserListView, UserUpdateView, toggle_user_status,
     CreateAgentView, DeactivateEnterpriseView, DashboardDataAPI,
-    AdminSubscriptionListView, VerifySubscriptionView, MySubscriptionView, auto_verify_payment
+    AdminSubscriptionListView, VerifySubscriptionView, MySubscriptionView
 )
 
 # 1. إعداد الـ Router
@@ -51,7 +51,6 @@ urlpatterns = [
     path('admin/subscriptions/pending/', AdminSubscriptionListView.as_view(), name='admin-subscriptions-list'),
     path('admin/subscriptions/verify/<int:pk>/', VerifySubscriptionView.as_view(), name='verify-subscription'),
     path('my-subscription/', MySubscriptionView.as_view(), name='my-subscription'),
-    path('payments/auto-verify/', auto_verify_payment, name='auto-verify-payment'),
     path('manage-agents/create/', CreateAgentView.as_view(), name='create-agent'),
     # --- دمج مسارات الـ ViewSets التلقائية ---
     path('', include(router.urls)),

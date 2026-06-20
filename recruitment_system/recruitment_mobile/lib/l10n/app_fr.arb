@@ -1,0 +1,17 @@
+{
+  "connexion": "Connexion",
+  "emailHint": "Email",
+  "passwordHint": "Mot de passe",
+  "forgotPassword": "Mot de passe oublié ?",
+  "loginSuccess": "Connexion réussie",
+  "dashboard": "Tableau de bord",
+  "subscriptions": "Subscriptions",
+  "gestionOffres": "Gestion Offres",
+  "candidatures": "Candidatures",
+  "monEntreprise": "Mon Entreprise",
+  "usersSystem": "Users System",
+  "monProfil": "Mon Profil",
+  "deconnexion": "Déconnexion",
+  "visualisationData": "Visualisation des Data",
+  "dernieresActivites": "Dernières Activités"
+}

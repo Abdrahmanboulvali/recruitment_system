@@ -67,15 +67,22 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
     }
   }
 
-  Future<void> _handleAnnuler(int id) async {
+  Future<void> _handleAnnuler(int id, String currentLang) async {
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Confirmation"),
-        content: const Text("Voulez-vous vraiment annuler cette candidature ?"),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E232D) : Colors.white,
+        title: Text(currentLang == 'ar' ? "تأكيد الإلغاء" : "Confirmation"),
+        content: Text(currentLang == 'ar' ? "هل أنت متأكد من أنك تريد إلغاء هذا الترشيح؟" : "Voulez-vous vraiment annuler cette candidature ?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Non")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Oui", style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(currentLang == 'ar' ? "لا" : "Non", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54))
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(currentLang == 'ar' ? "نعم" : "Oui", style: const TextStyle(color: Colors.red))
+          ),
         ],
       ),
     ) ?? false;
@@ -91,7 +98,8 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
           _fetchMyData();
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur lors de l'annulation")));
+        String errorMsg = currentLang == 'ar' ? "حدث خطأ أثناء إلغاء الترشيح" : "Erreur lors de l'annulation";
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     }
   }
@@ -101,16 +109,22 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
 
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
     if (_isLoading) {
       return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const CircularProgressIndicator(color: Color(0xFF10B981)),
               const SizedBox(height: 20),
-              Text("Analyse de vos candidatures en cours...",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: textColor.withOpacity(0.7))),
+              Text(
+                currentLang == 'ar' ? "جاري تحليل طلبات الترشيح الخاصة بك..." : "Analyse de vos candidatures en cours...",
+                style: TextStyle(fontWeight: FontWeight.bold, color: textColor.withOpacity(0.7)),
+              ),
             ],
           ),
         ),
@@ -118,7 +132,14 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Mes Candidatures"), elevation: 0),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Text(currentLang == 'ar' ? "ترشيحاتي" : "Mes Candidatures"),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        iconTheme: IconThemeData(color: textColor),
+        titleTextStyle: TextStyle(color: textColor, fontSize: 20, fontWeight: FontWeight.bold),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -126,14 +147,24 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
           children: [
             // Header المماثل للويب
             Container(
-              padding: const EdgeInsets.only(left: 15),
-              decoration: const BoxDecoration(border: Border(left: BorderSide(color: Color(0xFF10B981), width: 5))),
+              padding: currentLang == 'ar' ? const EdgeInsets.only(right: 15) : const EdgeInsets.only(left: 15),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: currentLang == 'ar' ? BorderSide.none : const BorderSide(color: Color(0xFF10B981), width: 5),
+                  right: currentLang == 'ar' ? const BorderSide(color: Color(0xFF10B981), width: 5) : BorderSide.none,
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Mes Candidatures", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: textColor)),
-                  Text("Suivez l'état d'avancement de vos demandes d'emploi",
-                      style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 13)),
+                  Text(
+                    currentLang == 'ar' ? "ترشيحاتي" : "Mes Candidatures",
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: textColor),
+                  ),
+                  Text(
+                    currentLang == 'ar' ? "تابع حالة وتقدم طلبات التوظيف الخاصة بك" : "Suivez l'état d'avancement de vos demandes d'emploi",
+                    style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -143,34 +174,44 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
               Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 50),
-                  child: Text("Vous n'avez postulé à aucune offre pour le moment.",
-                      textAlign: TextAlign.center, style: TextStyle(color: textColor.withOpacity(0.5))),
+                  child: Text(
+                    currentLang == 'ar' ? "لم تتقدم لأي وظيفة حتى الآن." : "Vous n'avez postulé à aucune offre pour le moment.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: textColor.withOpacity(0.5)),
+                  ),
                 ),
               )
             else
-              ...candidatures.map((can) => _buildCandidatureCard(can, textColor, isDark)),
+              ...candidatures.map((can) => _buildCandidatureCard(can, textColor, isDark, currentLang)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCandidatureCard(var can, Color textColor, bool isDark) {
+  Widget _buildCandidatureCard(var can, Color textColor, bool isDark, String currentLang) {
     String status = (can['statut'] ?? 'En attente').toString();
-    String title = offresMap[can['offre']] ?? "Offre #${can['offre']}";
 
-    // منطق الألوان مطابق للويب تماماً
+    // جلب عنوان العرض بالاعتماد على الـ Map
+    String title = offresMap[can['offre']] ?? (currentLang == 'ar' ? "عرض رقم #${can['offre']}" : "Offre #${can['offre']}");
+
+    // ترجمة الحالات وعرضها وفقاً للغة الحالية
+    String displayedStatus = status;
     Color statusBg;
     Color statusText;
+
     if (status.toLowerCase().contains('accept')) {
       statusBg = const Color(0xFF10B981).withOpacity(0.15);
       statusText = const Color(0xFF10B981);
+      displayedStatus = currentLang == 'ar' ? "مقبول" : status;
     } else if (status.toLowerCase().contains('refus')) {
       statusBg = const Color(0xFFEF4444).withOpacity(0.15);
       statusText = const Color(0xFFEF4444);
+      displayedStatus = currentLang == 'ar' ? "مرفوض" : status;
     } else {
       statusBg = const Color(0xFFF59E0B).withOpacity(0.15);
       statusText = const Color(0xFFF59E0B);
+      displayedStatus = currentLang == 'ar' ? "قيد الانتظار" : status;
     }
 
     return Container(
@@ -194,25 +235,28 @@ class _MesCandidaturesScreenState extends State<MesCandidaturesScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(10)),
-                child: Text(status, style: TextStyle(color: statusText, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: Text(displayedStatus, style: TextStyle(color: statusText, fontWeight: FontWeight.bold, fontSize: 12)),
               ),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            "Postulé le: ${can['date_postulation'].toString().split('T')[0]}",
+            "${currentLang == 'ar' ? 'تاريخ الترشيح: ' : 'Postulé le: '}${can['date_postulation'].toString().split('T')[0]}",
             style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 13),
           ),
           const Divider(height: 30, thickness: 0.5),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: currentLang == 'ar' ? Alignment.centerLeft : Alignment.centerRight,
             child: TextButton(
-              onPressed: () => _handleAnnuler(can['id']),
+              onPressed: () => _handleAnnuler(can['id'], currentLang),
               style: TextButton.styleFrom(
                 backgroundColor: const Color(0xFFEF4444).withOpacity(0.1),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              child: const Text("Annuler", style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12)),
+              child: Text(
+                currentLang == 'ar' ? "إلغاء الترشيح" : "Annuler",
+                style: const TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold, fontSize: 12),
+              ),
             ),
           )
         ],

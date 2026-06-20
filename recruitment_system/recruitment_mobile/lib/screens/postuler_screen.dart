@@ -89,9 +89,12 @@ class _PostulerScreenState extends State<PostulerScreen> {
     }
   }
 
-  Future<void> _submitCandidature() async {
+  Future<void> _submitCandidature(String currentLang) async {
     if (_cvFile == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Veuillez sélectionner votre CV (PDF)")));
+      String cvMsg = currentLang == 'ar'
+          ? "يرجى تحديد السيرة الذاتية الخاصة بك (PDF)"
+          : "Veuillez sélectionner votre CV (PDF)";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(cvMsg)));
       return;
     }
 
@@ -137,11 +140,17 @@ class _PostulerScreenState extends State<PostulerScreen> {
 
       var finalRes = await candReq.send();
       if (finalRes.statusCode == 201 || finalRes.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Succès ! Votre candidature a été transmise.")));
+        String successMsg = currentLang == 'ar'
+            ? "تم بنجاح! تم إرسال ترشيحك."
+            : "Succès ! Votre candidature a été transmise.";
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMsg)));
         Navigator.pushReplacementNamed(context, '/mes-candidatures');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur lors de la postulation.")));
+      String errMsg = currentLang == 'ar'
+          ? "حدث خطأ أثناء تقديم الطلب."
+          : "Erreur lors de la postulation.";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errMsg)));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -149,7 +158,10 @@ class _PostulerScreenState extends State<PostulerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_hasCheckedProfile) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
+    if (!_hasCheckedProfile) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF6366F1))));
 
     if (_alreadyApplied) {
       return Scaffold(
@@ -159,14 +171,22 @@ class _PostulerScreenState extends State<PostulerScreen> {
             children: [
               const Icon(Icons.warning_amber_rounded, size: 80, color: Colors.red),
               const SizedBox(height: 20),
-              const Text("Déjà postulé", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text("Vous avez déjà soumis votre candidature pour ce poste.", textAlign: TextAlign.center),
+              Text(
+                currentLang == 'ar' ? "تم التقديم مسبقاً" : "Déjà postulé",
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  currentLang == 'ar'
+                      ? "لقد قمت بالفعل بتقديم طلب توظيف لهذا المنصب سابقاً."
+                      : "Vous avez déjà soumis votre candidature pour ce poste.",
+                  textAlign: TextAlign.center
+                ),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pushReplacementNamed(context, '/mes-candidatures'),
-                child: const Text("Suivre ma candidature"),
+                child: Text(currentLang == 'ar' ? "متابعة حالة ترشيحي" : "Suivre ma candidature"),
               )
             ],
           ),
@@ -175,7 +195,11 @@ class _PostulerScreenState extends State<PostulerScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text("Postuler à l'offre #$_offreId")),
+      appBar: AppBar(
+        title: Text(
+          currentLang == 'ar' ? "الترشح للعرض #$_offreId" : "Postuler à l'offre #$_offreId"
+        )
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -184,16 +208,39 @@ class _PostulerScreenState extends State<PostulerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_candidatId == null) ...[
-                const Text("📝 Informations personnelles", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(
+                  currentLang == 'ar' ? "📝 المعلومات الشخصية" : "📝 Informations personnelles",
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                ),
                 const SizedBox(height: 15),
-                TextFormField(controller: _nomController, decoration: const InputDecoration(labelText: "Nom"), validator: (v) => v!.isEmpty ? "Requis" : null),
-                TextFormField(controller: _prenomController, decoration: const InputDecoration(labelText: "Prénom"), validator: (v) => v!.isEmpty ? "Requis" : null),
-                TextFormField(controller: _diplomeController, decoration: const InputDecoration(labelText: "Dernier diplôme"), validator: (v) => v!.isEmpty ? "Requis" : null),
-                TextFormField(controller: _experienceController, decoration: const InputDecoration(labelText: "Expérience (ans)"), keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? "Requis" : null),
+                TextFormField(
+                  controller: _nomController,
+                  decoration: InputDecoration(labelText: currentLang == 'ar' ? "الاسم العائلي" : "Nom"),
+                  validator: (v) => v!.isEmpty ? (currentLang == 'ar' ? "مطلوب" : "Requis") : null
+                ),
+                TextFormField(
+                  controller: _prenomController,
+                  decoration: InputDecoration(labelText: currentLang == 'ar' ? "الاسم الشخصي" : "Prénom"),
+                  validator: (v) => v!.isEmpty ? (currentLang == 'ar' ? "مطلوب" : "Requis") : null
+                ),
+                TextFormField(
+                  controller: _diplomeController,
+                  decoration: InputDecoration(labelText: currentLang == 'ar' ? "آخر شهادة محصل عليها" : "Dernier diplôme"),
+                  validator: (v) => v!.isEmpty ? (currentLang == 'ar' ? "مطلوب" : "Requis") : null
+                ),
+                TextFormField(
+                  controller: _experienceController,
+                  decoration: InputDecoration(labelText: currentLang == 'ar' ? "الخبرة (سنوات)" : "Expérience (ans)"),
+                  keyboardType: TextInputType.number,
+                  validator: (v) => v!.isEmpty ? (currentLang == 'ar' ? "مطلوب" : "Requis") : null
+                ),
                 const SizedBox(height: 30),
               ],
 
-              const Text("📄 Votre CV (PDF)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                currentLang == 'ar' ? "📄 السيرة الذاتية (PDF)" : "📄 Votre CV (PDF)",
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+              ),
               const SizedBox(height: 10),
               InkWell(
                 onTap: _pickCV,
@@ -209,7 +256,11 @@ class _PostulerScreenState extends State<PostulerScreen> {
                     children: [
                       const Icon(Icons.cloud_upload_outlined, size: 40, color: Colors.blue),
                       const SizedBox(height: 10),
-                      Text(_cvFile == null ? "Cliquez pour sélectionner un fichier PDF" : "✅ ${_cvFile!.path.split('/').last}"),
+                      Text(
+                        _cvFile == null
+                            ? (currentLang == 'ar' ? "اضغط هنا لاختيار ملف PDF" : "Cliquez pour sélectionner un fichier PDF")
+                            : "✅ ${_cvFile!.path.split('/').last}"
+                      ),
                     ],
                   ),
                 ),
@@ -223,10 +274,14 @@ class _PostulerScreenState extends State<PostulerScreen> {
                     padding: const EdgeInsets.all(16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _isLoading ? null : _submitCandidature,
+                  onPressed: _isLoading ? null : () => _submitCandidature(currentLang),
                   child: _isLoading
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(_candidatId != null ? "Confirmer la postulation" : "Créer profil & Postuler"),
+                    : Text(
+                        _candidatId != null
+                            ? (currentLang == 'ar' ? "تأكيد الترشح" : "Confirmer la postulation")
+                            : (currentLang == 'ar' ? "إنشاء ملف شخصي والترشح" : "Créer profil & Postuler")
+                      ),
                 ),
               )
             ],

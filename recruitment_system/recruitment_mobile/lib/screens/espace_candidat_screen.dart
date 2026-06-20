@@ -95,6 +95,9 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
     final cardColor = _isDarkMode ? ApiConfig.kBgCard : Colors.white;
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF0F172A);
 
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
     return Scaffold(
       backgroundColor: bgColor,
       drawer: _isLoggedIn ? const AppDrawer() : null,
@@ -112,10 +115,14 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Portail de Recrutement",
-                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-            Text("Plateforme intelligente",
-                style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 11)),
+            Text(
+              currentLang == 'ar' ? "بوابة التوظيف" : (currentLang == 'en' ? "Recruitment Portal" : "Portail de Recrutement"),
+              style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              currentLang == 'ar' ? "منصة ذكية" : (currentLang == 'en' ? "Intelligent platform" : "Plateforme intelligente"),
+              style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 11),
+            ),
           ],
         ),
         actions: [
@@ -126,7 +133,10 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
             ),
             TextButton(
               onPressed: () => Navigator.pushNamed(context, '/login'),
-              child: const Text("Login", style: TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)),
+              child: Text(
+                currentLang == 'ar' ? "تسجيل الدخول" : "Login",
+                style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.only(right: 10, top: 8, bottom: 8),
@@ -136,7 +146,10 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
                 ),
                 onPressed: () => Navigator.pushNamed(context, '/register'),
-                child: const Text("Sign Up", style: TextStyle(color: Colors.white, fontSize: 12)),
+                child: Text(
+                  currentLang == 'ar' ? "إنشاء حساب" : "Sign Up",
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
               ),
             ),
           ]
@@ -146,27 +159,27 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
         ? const Center(child: CircularProgressIndicator())
         : Column(
             children: [
-              _buildSearchBar(textColor, cardColor),
-              _buildSpecialties(textColor),
-              _buildTabs(textColor, cardColor),
+              _buildSearchBar(textColor, cardColor, currentLang),
+              _buildSpecialties(textColor, currentLang),
+              _buildTabs(textColor, cardColor, currentLang),
               Expanded(
                 child: _selectedTab == 'OFFRES'
-                  ? _buildOffresList(textColor, cardColor)
-                  : _buildEntreprisesGrid(textColor, cardColor),
+                  ? _buildOffresList(textColor, cardColor, currentLang)
+                  : _buildEntreprisesGrid(textColor, cardColor, currentLang),
               ),
             ],
           ),
     );
   }
 
-  Widget _buildSearchBar(Color textColor, Color cardColor) {
+  Widget _buildSearchBar(Color textColor, Color cardColor, String currentLang) {
     return Padding(
       padding: const EdgeInsets.all(15),
       child: TextField(
         onChanged: (v) => setState(() => _searchTerm = v),
         style: TextStyle(color: textColor),
         decoration: InputDecoration(
-          hintText: "Rechercher...",
+          hintText: currentLang == 'ar' ? "بحث..." : "Rechercher...",
           hintStyle: TextStyle(color: textColor.withOpacity(0.5)),
           prefixIcon: Icon(Icons.search, color: textColor.withOpacity(0.5)),
           filled: true,
@@ -177,7 +190,7 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
     );
   }
 
-  Widget _buildSpecialties(Color textColor) {
+  Widget _buildSpecialties(Color textColor, String currentLang) {
     return SizedBox(
       height: 50,
       child: ListView.builder(
@@ -186,10 +199,25 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         itemBuilder: (context, i) {
           bool isSelected = _selectedSpecialty == specialties[i];
+
+          // ترجمة العناصر الأساسية في القائمة الجانبية للتصنيفات
+          String displayName = specialties[i];
+          if (currentLang == 'ar') {
+            if (specialties[i] == "Tous") displayName = "الكل";
+            if (specialties[i] == "Comptabilité") displayName = "المحاسبة";
+            if (specialties[i] == "Marketing") displayName = "التسويق";
+            if (specialties[i] == "Design") displayName = "التصميم";
+            if (specialties[i] == "Autre") displayName = "آخر";
+          } else if (currentLang == 'en') {
+            if (specialties[i] == "Tous") displayName = "All";
+            if (specialties[i] == "Comptabilité") displayName = "Accounting";
+            if (specialties[i] == "Autre") displayName = "Other";
+          }
+
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 5),
             child: ChoiceChip(
-              label: Text(specialties[i]),
+              label: Text(displayName),
               selected: isSelected,
               onSelected: (v) => setState(() => _selectedSpecialty = specialties[i]),
               selectedColor: ApiConfig.kPrimary,
@@ -202,24 +230,24 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
     );
   }
 
-  Widget _buildTabs(Color textColor, Color cardColor) {
+  Widget _buildTabs(Color textColor, Color cardColor, String currentLang) {
     return Padding(
       padding: const EdgeInsets.all(15),
       child: Row(
         children: [
-          _tabBtn("OFFRES", Icons.work, cardColor, textColor),
+          _tabBtn("OFFRES", currentLang == 'ar' ? "الوظائف" : (currentLang == 'en' ? "OFFERS" : "OFFRES"), Icons.work, cardColor, textColor),
           const SizedBox(width: 10),
-          _tabBtn("ENTREPRISES", Icons.business, cardColor, textColor),
+          _tabBtn("ENTREPRISES", currentLang == 'ar' ? "الشركات" : (currentLang == 'en' ? "COMPANIES" : "ENTREPRISES"), Icons.business, cardColor, textColor),
         ],
       ),
     );
   }
 
-  Widget _tabBtn(String label, IconData icon, Color cardColor, Color textColor) {
-    bool isSelected = _selectedTab == label;
+  Widget _tabBtn(String tabKey, String label, IconData icon, Color cardColor, Color textColor) {
+    bool isSelected = _selectedTab == tabKey;
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _selectedTab = label),
+        onTap: () => setState(() => _selectedTab = tabKey),
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -239,7 +267,7 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
     );
   }
 
-  Widget _buildOffresList(Color textColor, Color cardColor) {
+  Widget _buildOffresList(Color textColor, Color cardColor, String currentLang) {
     var filtered = offres.where((o) {
       bool matchesSearch = o['titre'].toString().toLowerCase().contains(_searchTerm.toLowerCase());
       if (_selectedSpecialty == "Tous") return matchesSearch;
@@ -251,6 +279,15 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
       padding: const EdgeInsets.all(15),
       itemBuilder: (context, i) {
         var o = filtered[i];
+
+        // إعداد نص زر التقديم بناءً على حالة تسجيل الدخول واللغة
+        String buttonText;
+        if (_isLoggedIn) {
+          buttonText = currentLang == 'ar' ? "ترشح الآن" : (currentLang == 'en' ? "Apply now" : "Postuler maintenant");
+        } else {
+          buttonText = currentLang == 'ar' ? "سجل دخولك للترشح" : (currentLang == 'en' ? "Log in to apply" : "Connectez-vous pour postuler");
+        }
+
         return Container(
           margin: const EdgeInsets.only(bottom: 15),
           padding: const EdgeInsets.all(20),
@@ -279,7 +316,7 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
                   ),
                   onPressed: () => _handleApply(o['id']),
                   child: Text(
-                    _isLoggedIn ? "Postuler maintenant" : "Connectez-vous pour postuler",
+                    buttonText,
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
                   ),
                 ),
@@ -291,7 +328,7 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
     );
   }
 
-  Widget _buildEntreprisesGrid(Color textColor, Color cardColor) {
+  Widget _buildEntreprisesGrid(Color textColor, Color cardColor, String currentLang) {
     return GridView.builder(
       padding: const EdgeInsets.all(15),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -310,7 +347,7 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
                 child: Text(e['nom'].toString().isNotEmpty ? e['nom'][0] : "E", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 15),
-              Text(e['nom'] ?? "Entreprise", style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
+              Text(e['nom'] ?? (currentLang == 'ar' ? "شركة" : "Entreprise"), style: TextStyle(color: textColor, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               OutlinedButton(
                 onPressed: () {
@@ -321,7 +358,7 @@ class _EspaceCandidatState extends State<EspaceCandidat> {
                     arguments: {'id': e['id']}
                   );
                 },
-                child: const Text("Profil"),
+                child: Text(currentLang == 'ar' ? "الملف الشخصي" : (currentLang == 'en' ? "Profile" : "Profil")),
               )
             ],
           ),

@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     'PROPRIÉTAIRE D\'ENTREPRISE'
   ];
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(String currentLang) async {
     setState(() { _isLoading = true; _error = ''; });
 
     try {
@@ -101,10 +101,14 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } else {
-        setState(() => _error = "Email ou mot de passe incorrect.");
+        setState(() => _error = currentLang == 'ar'
+            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة."
+            : "Email ou mot de passe incorrect.");
       }
     } catch (err) {
-      setState(() => _error = "Erreur de connexion au serveur.");
+      setState(() => _error = currentLang == 'ar'
+          ? "خطأ في الاتصال بالخادم."
+          : "Erreur de connexion au serveur.");
       debugPrint("Login Error: $err");
     } finally {
       setState(() => _isLoading = false);
@@ -117,6 +121,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final cardBg = _isDarkMode ? ApiConfig.kBgCard : Colors.white.withOpacity(0.9);
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF1E293B);
     final inputBg = _isDarkMode ? Colors.black.withOpacity(0.3) : Colors.white;
+
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -139,7 +146,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 backgroundColor: ApiConfig.kPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
               ),
-              child: Text(_isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'),
+              child: Text(
+                _isDarkMode
+                    ? (currentLang == 'ar' ? '☀️ الوضع المضيء' : '☀️ Mode Clair')
+                    : (currentLang == 'ar' ? '🌙 الوضع المظلم' : '🌙 Mode Sombre')
+              ),
             ),
           ),
           Center(
@@ -160,18 +171,40 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text("Connexion", style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -1)),
+                    Text(
+                      currentLang == 'ar' ? "تسجيل الدخول" : (currentLang == 'en' ? "Login" : "Connexion"),
+                      style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -1)
+                    ),
                     const SizedBox(height: 5),
-                    Text("Accédez à votre compte professionnel", style: TextStyle(color: _isDarkMode ? Colors.white54 : Colors.grey[600], fontSize: 14)),
+                    Text(
+                      currentLang == 'ar' ? "الوصول إلى حسابك المهني" : (currentLang == 'en' ? "Access your professional account" : "Accédez à votre compte professionnel"),
+                      style: TextStyle(color: _isDarkMode ? Colors.white54 : Colors.grey[600], fontSize: 14)
+                    ),
                     const SizedBox(height: 35),
-                    _buildInput(controller: _emailController, hint: "Email", isDarkMode: _isDarkMode, inputBg: inputBg, textColor: textColor),
+                    _buildInput(
+                      controller: _emailController,
+                      hint: currentLang == 'ar' ? "البريد الإلكتروني" : "Email",
+                      isDarkMode: _isDarkMode,
+                      inputBg: inputBg,
+                      textColor: textColor
+                    ),
                     const SizedBox(height: 20),
-                    _buildInput(controller: _passwordController, hint: "Mot de passe", isPassword: true, isDarkMode: _isDarkMode, inputBg: inputBg, textColor: textColor),
+                    _buildInput(
+                      controller: _passwordController,
+                      hint: currentLang == 'ar' ? "كلمة المرور" : (currentLang == 'en' ? "Password" : "Mot de passe"),
+                      isPassword: true,
+                      isDarkMode: _isDarkMode,
+                      inputBg: inputBg,
+                      textColor: textColor
+                    ),
                     Align(
-                      alignment: Alignment.centerRight,
+                      alignment: currentLang == 'ar' ? Alignment.centerLeft : Alignment.centerRight,
                       child: TextButton(
                         onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
-                        child: const Text("Mot de passe oublié ?", style: TextStyle(color: ApiConfig.kPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
+                        child: Text(
+                          currentLang == 'ar' ? "نسيت كلمة المرور؟" : (currentLang == 'en' ? "Forgot password?" : "Mot de passe oublié ?"),
+                          style: const TextStyle(color: ApiConfig.kPrimary, fontSize: 12, fontWeight: FontWeight.w600)
+                        ),
                       ),
                     ),
                     if (_error.isNotEmpty)
@@ -190,9 +223,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           boxShadow: [BoxShadow(color: const Color(0xFF6366F1).withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 12))],
                         ),
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleSubmit,
+                          onPressed: _isLoading ? null : () => _handleSubmit(currentLang),
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                          child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Se connecter", style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                          child: _isLoading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : Text(
+                                  currentLang == 'ar' ? "تسجيل الدخول" : (currentLang == 'en' ? "Sign In" : "Se connecter"),
+                                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)
+                                ),
                         ),
                       ),
                     ),
@@ -201,10 +239,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       alignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text("Vous n'avez pas de compte ?", style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 14)),
+                        Text(
+                          currentLang == 'ar' ? "ليس لديك حساب؟" : (currentLang == 'en' ? "Don't have an account?" : "Vous n'avez pas de compte ?"),
+                          style: TextStyle(color: textColor.withOpacity(0.7), fontSize: 14)
+                        ),
                         GestureDetector(
                           onTap: () => Navigator.pushNamed(context, '/register'),
-                          child: const Text(" Créer un compte", style: TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.w800)),
+                          child: Text(
+                            currentLang == 'ar' ? " إنشاء حساب" : (currentLang == 'en' ? " Create an account" : " Créer un compte"),
+                            style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.w800)
+                          ),
                         ),
                       ],
                     ),

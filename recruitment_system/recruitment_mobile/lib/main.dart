@@ -17,6 +17,10 @@ import 'screens/espace_candidat_screen.dart';
 import 'screens/mes_candidatures_screen.dart';
 import 'screens/postuler_screen.dart';
 import 'screens/profile_entreprise_screen.dart';
+import 'screens/verify_otp_screen.dart';
+import 'screens/forgot_password_screen.dart';
+import 'screens/add_agent_screen.dart'; // تم إضافة هذا الاستيراد
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 const List<String> dgRoles = [
   'DG',
@@ -41,10 +45,17 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.dark;
+  Locale _locale = const Locale('fr');
 
   void toggleTheme() {
     setState(() {
       _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    });
+  }
+
+  void setLocale(Locale newLocale) {
+    setState(() {
+      _locale = newLocale;
     });
   }
 
@@ -54,7 +65,13 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'Recrutement System',
       themeMode: _themeMode,
-      // تعريف الثيم المضيء بشكل كامل
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: const [
+        Locale('fr'),
+        Locale('ar'),
+        Locale('en'),
+      ],
+      locale: _locale,
       theme: ThemeData(
         brightness: Brightness.light,
         primaryColor: ApiConfig.kPrimary,
@@ -67,7 +84,6 @@ class _MyAppState extends State<MyApp> {
           elevation: 0,
         ),
       ),
-      // تعريف الثيم المظلم بشكل كامل
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: ApiConfig.kPrimary,
@@ -79,10 +95,11 @@ class _MyAppState extends State<MyApp> {
           elevation: 0,
         ),
       ),
-      initialRoute: '/espace-candidat', // تم تغييرها من /login لتعمل كواجهة أولى
+      initialRoute: '/espace-candidat',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/verify-otp': (context) => const VerifyOtpScreen(email: ''),
         '/dashboard': (context) => DashboardScreen(),
         '/all-stats': (context) => AllStatsScreen(),
         '/manage-offres': (context) => ManageOffresScreen(),
@@ -96,6 +113,8 @@ class _MyAppState extends State<MyApp> {
         '/mes-candidatures': (context) => const MesCandidaturesScreen(),
         '/postuler': (context) => const PostulerScreen(),
         '/profile-entreprise': (context) => const ProfileEntrepriseScreen(),
+        '/forgot-password': (context) => const ForgotPasswordScreen(),
+        '/add-agent': (context) => AddAgentScreen(), // إضافة مسار صفحة إضافة وكيل
       },
     );
   }
@@ -142,6 +161,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
+    final currentLang = Localizations.localeOf(context).languageCode;
 
     return Drawer(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -162,21 +182,22 @@ class _AppDrawerState extends State<AppDrawer> {
               padding: EdgeInsets.zero,
               children: [
                 if (isSuperAdmin) ...[
-                  _buildItem(context, Icons.analytics_outlined, "Stats Globales", '/all-stats'),
-                  _buildItem(context, Icons.business_rounded, "Manage Enterprises", '/manage-enterprises'),
-                  _buildItem(context, Icons.payments_outlined, "Paiements", '/manage-payments'),
+                  _buildItem(context, Icons.analytics_outlined, currentLang == 'ar' ? "الإحصائيات العامة" : (currentLang == 'en' ? "Global Stats" : "Stats Globales"), '/all-stats'),
+                  _buildItem(context, Icons.business_rounded, currentLang == 'ar' ? "إدارة الشركات" : (currentLang == 'en' ? "Manage Enterprises" : "Manage Enterprises"), '/manage-enterprises'),
+                  _buildItem(context, Icons.payments_outlined, currentLang == 'ar' ? "المدفوعات" : (currentLang == 'en' ? "Payments" : "Paiements"), '/manage-payments'),
                 ],
                 if (isDG) ...[
-                  _buildItem(context, Icons.dashboard_outlined, "Tableau de bord", '/dashboard'),
-                  _buildItem(context, Icons.card_membership_outlined, "Subscriptions", '/subscriptions'),
+                  _buildItem(context, Icons.dashboard_outlined, currentLang == 'ar' ? "لوحة التحكم" : (currentLang == 'en' ? "Dashboard" : "Tableau de bord"), '/dashboard'),
+                  _buildItem(context, Icons.card_membership_outlined, currentLang == 'ar' ? "الاشتراكات" : (currentLang == 'en' ? "Subscriptions" : "Abonnements"), '/subscriptions'),
+                  _buildItem(context, Icons.person_add_alt_1_outlined, currentLang == 'ar' ? "إضافة وكيل" : (currentLang == 'en' ? "Add Agent" : "Ajouter un Agent"), '/add-agent'),
                 ],
                 if (isDG || isAgent) ...[
-                  _buildItem(context, Icons.work_outline, "Gestion Offres", '/manage-offres'),
-                  _buildItem(context, Icons.assignment_turned_in_outlined, "Candidatures", '/manage-candidatures'),
+                  _buildItem(context, Icons.work_outline, currentLang == 'ar' ? "إدارة الوظائف" : (currentLang == 'en' ? "Job Management" : "Gestion Offres"), '/manage-offres'),
+                  _buildItem(context, Icons.assignment_turned_in_outlined, currentLang == 'ar' ? "الترشيحات" : (currentLang == 'en' ? "Applications" : "Candidatures"), '/manage-candidatures'),
                   if (_enterpriseId != null && _enterpriseId!.isNotEmpty)
                     ListTile(
                       leading: Icon(Icons.business, color: isDark ? Colors.white70 : Colors.black54),
-                      title: const Text("Mon Entreprise", style: TextStyle(fontSize: 14)),
+                      title: Text(currentLang == 'ar' ? "شركتي" : (currentLang == 'en' ? "My Company" : "Mon Entreprise"), style: const TextStyle(fontSize: 14)),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.pushNamed(
@@ -187,31 +208,63 @@ class _AppDrawerState extends State<AppDrawer> {
                       },
                     ),
                 ],
-
                 if (isCandidat) ...[
-                  _buildItem(context, Icons.search, "Explorer Offres", '/espace-candidat'),
-                  if (_role != "") // لا تظهر "طلباتي" للزائر غير المسجل
-                    _buildItem(context, Icons.history_edu_outlined, "Mes Postulations", '/mes-candidatures'),
+                  _buildItem(context, Icons.search, currentLang == 'ar' ? "استكشاف الوظائف" : (currentLang == 'en' ? "Explore Jobs" : "Explorer Offres"), '/espace-candidat'),
+                  if (_role != "")
+                    _buildItem(context, Icons.history_edu_outlined, currentLang == 'ar' ? "ترشيحاتي" : (currentLang == 'en' ? "My Applications" : "Mes Postulations"), '/mes-candidatures'),
                 ],
                 if (isDG || isSuperAdmin)
-                  _buildItem(context, Icons.people_outline, "Users System", '/users'),
+                  _buildItem(context, Icons.people_outline, currentLang == 'ar' ? "مستخدمي النظام" : (currentLang == 'en' ? "Users System" : "Users System"), '/users'),
 
-                _buildItem(context, Icons.person_outline, "Mon Profil", '/profile'),
+                _buildItem(context, Icons.person_outline, currentLang == 'ar' ? "ملفي الشخصي" : (currentLang == 'en' ? "My Profile" : "Mon Profil"), '/profile'),
 
                 Divider(color: theme.dividerColor),
 
                 ListTile(
+                  leading: Icon(Icons.language_rounded, color: isDark ? Colors.white70 : Colors.black54),
+                  title: Text(
+                    currentLang == 'ar' ? "لغة التطبيق" : (currentLang == 'en' ? "Language" : "Langue"),
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 14),
+                  ),
+                  trailing: DropdownButton<String>(
+                    value: currentLang,
+                    icon: const Icon(Icons.arrow_drop_down, color: ApiConfig.kPrimary),
+                    dropdownColor: theme.cardColor,
+                    underline: const SizedBox(),
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'fr', child: Text("Français")),
+                      DropdownMenuItem(value: 'ar', child: Text("العربية")),
+                      DropdownMenuItem(value: 'en', child: Text("English")),
+                    ],
+                    onChanged: (String? newLang) {
+                      if (newLang != null) {
+                        Navigator.pop(context);
+                        MyApp.of(context).setLocale(Locale(newLang));
+                      }
+                    },
+                  ),
+                ),
+                ListTile(
                   leading: Icon(isDark ? Icons.wb_sunny_outlined : Icons.nightlight_round,
                     color: isDark ? Colors.orangeAccent : Colors.indigo),
-                  title: Text(isDark ? "Mode Clair" : "Mode Sombre",
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                  title: Text(
+                      isDark
+                        ? (currentLang == 'ar' ? "الوضع الفاتح" : (currentLang == 'en' ? "Light Mode" : "Mode Clair"))
+                        : (currentLang == 'ar' ? "الوضع المظلم" : (currentLang == 'en' ? "Dark Mode" : "Mode Sombre")),
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87)
+                  ),
                   onTap: () => MyApp.of(context).toggleTheme(),
                 ),
               ],
             ),
           ),
           Divider(color: theme.dividerColor),
-          _buildItem(context, Icons.logout_rounded, "Déconnexion", '/espace-candidat', isLogout: true),
+          _buildItem(context, Icons.logout_rounded, currentLang == 'ar' ? "تسجيل الخروج" : (currentLang == 'en' ? "Logout" : "Déconnexion"), '/espace-candidat', isLogout: true),
           const SizedBox(height: 20),
         ],
       ),
@@ -227,7 +280,6 @@ class _AppDrawerState extends State<AppDrawer> {
         if (isLogout) {
           await _storage.deleteAll();
           if (!mounted) return;
-          // التوجيه لصفحة البداية (الفضاء العام) بعد الخروج
           Navigator.pushNamedAndRemoveUntil(context, '/espace-candidat', (r) => false);
         } else {
           Navigator.pop(context);

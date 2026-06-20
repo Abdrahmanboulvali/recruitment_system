@@ -47,9 +47,14 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     }
   }
 
-  Future<void> handleApprove(int? userId) async {
+  Future<void> handleApprove(int? userId, String currentLang) async {
     if (userId == null) return;
-    bool confirm = await _showConfirmDialog("Approuver cette entité ?");
+
+    String confirmMsg = currentLang == 'ar'
+        ? "هل توافق على تفعيل هذه المنشأة؟"
+        : (currentLang == 'en' ? "Approve this entity?" : "Approuver cette entité ?");
+
+    bool confirm = await _showConfirmDialog(confirmMsg, currentLang);
     if (!confirm) return;
 
     try {
@@ -60,17 +65,24 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
       );
 
       if (response.statusCode == 200) {
-        _showSnackBar("Entité activée !");
+        String successMsg = currentLang == 'ar' ? "تم تفعيل المنشأة بنجاح!" : "Entité activée !";
+        _showSnackBar(successMsg);
         fetchEnterprises();
       }
     } catch (e) {
-      _showSnackBar("Erreur lors de l'activation");
+      String errorMsg = currentLang == 'ar' ? "حدث خطأ أثناء التفعيل" : "Erreur lors de l'activation";
+      _showSnackBar(errorMsg);
     }
   }
 
-  Future<void> handleDeactivate(int? userId) async {
+  Future<void> handleDeactivate(int? userId, String currentLang) async {
     if (userId == null) return;
-    bool confirm = await _showConfirmDialog("Désactiver cette entité ?");
+
+    String confirmMsg = currentLang == 'ar'
+        ? "هل تريد إلغاء تفعيل هذه المنشأة؟"
+        : (currentLang == 'en' ? "Deactivate this entity?" : "Désactiver cette entité ?");
+
+    bool confirm = await _showConfirmDialog(confirmMsg, currentLang);
     if (!confirm) return;
 
     try {
@@ -81,16 +93,22 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
       );
 
       if (response.statusCode == 200) {
-        _showSnackBar("Entité désactivée !");
+        String successMsg = currentLang == 'ar' ? "تم إلغاء تفعيل المنشأة!" : "Entité désactivée !";
+        _showSnackBar(successMsg);
         fetchEnterprises();
       }
     } catch (e) {
-      _showSnackBar("Erreur lors de la désactivation");
+      String errorMsg = currentLang == 'ar' ? "حدث خطأ أثناء إلغاء التفعيل" : "Erreur lors de la désactivation";
+      _showSnackBar(errorMsg);
     }
   }
 
-  Future<void> handleDelete(int enterpriseId) async {
-    bool confirm = await _showConfirmDialog("Voulez-vous vraiment supprimer définitivement cette entreprise ?");
+  Future<void> handleDelete(int enterpriseId, String currentLang) async {
+    String confirmMsg = currentLang == 'ar'
+        ? "هل أنت متأكد تماماً من حذف هذه الشركة نهائياً؟"
+        : (currentLang == 'en' ? "Are you sure you want to permanently delete this company?" : "Voulez-vous vraiment supprimer définitivement cette entreprise ?");
+
+    bool confirm = await _showConfirmDialog(confirmMsg, currentLang);
     if (!confirm) return;
 
     try {
@@ -101,15 +119,17 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
       );
 
       if (response.statusCode == 204 || response.statusCode == 200) {
-        _showSnackBar("Entreprise supprimée !");
+        String successMsg = currentLang == 'ar' ? "تم حذف الشركة بنجاح!" : "Entreprise supprimée !";
+        _showSnackBar(successMsg);
         fetchEnterprises();
       }
     } catch (e) {
-      _showSnackBar("Erreur lors de la suppression");
+      String errorMsg = currentLang == 'ar' ? "حدث خطأ أثناء الحذف" : "Erreur lors de la suppression";
+      _showSnackBar(errorMsg);
     }
   }
 
-  Future<void> openPreview(String? fileUrl) async {
+  Future<void> openPreview(String? fileUrl, String currentLang) async {
     if (fileUrl == null) return;
     final fullUrl = fileUrl.startsWith('http') ? fileUrl : "${ApiConfig.baseUrl}$fileUrl";
     final uri = Uri.parse(fullUrl);
@@ -117,7 +137,8 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
-      _showSnackBar("Impossible d'ouvrir le document");
+      String errorMsg = currentLang == 'ar' ? "تعذر فتح المستند" : "Impossible d'ouvrir le document";
+      _showSnackBar(errorMsg);
     }
   }
 
@@ -126,25 +147,34 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Gestion des Entités",
-          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        title: Text(
+          currentLang == 'ar' ? "إدارة المنشآت" : (currentLang == 'en' ? "Manage Enterprises" : "Gestion des Entités"),
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
-          : _buildEnterprisesGrid(theme, isDark),
+          : _buildEnterprisesGrid(theme, isDark, currentLang),
     );
   }
 
-  Widget _buildEnterprisesGrid(ThemeData theme, bool isDark) {
+  Widget _buildEnterprisesGrid(ThemeData theme, bool isDark, String currentLang) {
     if (enterprises.isEmpty) {
-      return Center(child: Text("Aucune entreprise trouvée",
-        style: TextStyle(color: isDark ? Colors.white24 : Colors.black26)));
+      return Center(
+        child: Text(
+          currentLang == 'ar' ? "لم يتم العثور على أي شركة" : (currentLang == 'en' ? "No company found" : "Aucune entreprise trouvée"),
+          style: TextStyle(color: isDark ? Colors.white24 : Colors.black26),
+        ),
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -178,7 +208,9 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      isApproved ? "● ACTIVE" : "● EN ATTENTE",
+                      isApproved
+                          ? (currentLang == 'ar' ? "● نشط" : "● ACTIVE")
+                          : (currentLang == 'ar' ? "● قيد الانتظار" : "● EN ATTENTE"),
                       style: TextStyle(
                         color: isApproved ? Colors.green : Colors.orange,
                         fontSize: 10,
@@ -189,12 +221,16 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
                 ],
               ),
               const SizedBox(height: 15),
-              Text(ent['name'] ?? "Nom non défini",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+              Text(
+                ent['name'] ?? (currentLang == 'ar' ? "اسم غير محدد" : "Nom non défini"),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+              ),
               const SizedBox(height: 8),
-              Text(ent['description'] ?? 'Aucune description',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13)),
+              Text(
+                ent['description'] ?? (currentLang == 'ar' ? "لا يوجد وصف" : 'Aucune description'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 13),
+              ),
               const SizedBox(height: 20),
 
               Container(
@@ -206,7 +242,9 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
                   border: Border.all(color: ApiConfig.kPrimary.withOpacity(0.2)),
                 ),
                 child: Text(
-                  "👤 Manager: ${ent['dg_name'] ?? 'Non assigné'}",
+                  currentLang == 'ar'
+                      ? "👤 المدير: ${ent['dg_name'] ?? 'لم يتم التعيين'}"
+                      : "👤 Manager: ${ent['dg_name'] ?? 'Non assigné'}",
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: ApiConfig.kPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
@@ -221,28 +259,42 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
                       side: const BorderSide(color: Colors.amber),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    onPressed: () => openPreview(ent['verification_document']),
+                    onPressed: () => openPreview(ent['verification_document'], currentLang),
                     icon: const Icon(Icons.search, color: Colors.amber, size: 18),
-                    label: const Text("Voir le document", style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+                    label: Text(
+                      currentLang == 'ar' ? "عرض المستند" : "Voir le document",
+                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 )
               else
-                const Text("⚠️ Document manquant", style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  currentLang == 'ar' ? "⚠️ مستند التحقق مفقود" : "⚠️ Document manquant",
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
 
               const SizedBox(height: 20),
 
               if (isApproved)
-                _buildActionButton("Désactiver l'entité", Colors.orange, () => handleDeactivate(ent['owner_id']))
+                _buildActionButton(
+                  currentLang == 'ar' ? "إلغاء تفعيل المنشأة" : "Désactiver l'entité",
+                  Colors.orange,
+                  () => handleDeactivate(ent['owner_id'], currentLang),
+                )
               else
-                _buildActionButton("Approuver l'entité", Colors.green, () => handleApprove(ent['owner_id'])),
+                _buildActionButton(
+                  currentLang == 'ar' ? "الموافقة على المنشأة" : "Approuver l'entité",
+                  Colors.green,
+                  () => handleApprove(ent['owner_id'], currentLang),
+                ),
 
               const SizedBox(height: 10),
 
               GestureDetector(
-                onTap: () => handleDelete(ent['id']),
-                child: const Text(
-                  "Supprimer l'entreprise",
-                  style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                onTap: () => handleDelete(ent['id'], currentLang),
+                child: Text(
+                  currentLang == 'ar' ? "حذف الشركة نهائياً" : "Supprimer l'entreprise",
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
                 ),
               ),
             ],
@@ -268,19 +320,29 @@ class _ManageEnterprisesScreenState extends State<ManageEnterprisesScreen> {
     );
   }
 
-  Future<bool> _showConfirmDialog(String message) async {
+  Future<bool> _showConfirmDialog(String message, String currentLang) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
-        title: const Text("Confirmation"),
+        title: Text(currentLang == 'ar' ? "تأكيد" : "Confirmation"),
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false),
-            child: Text("Annuler", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Confirmer", style: TextStyle(color: ApiConfig.kPrimary))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              currentLang == 'ar' ? "إلغاء" : "Annuler",
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              currentLang == 'ar' ? "تأكيد" : "Confirmer",
+              style: const TextStyle(color: ApiConfig.kPrimary),
+            ),
+          ),
         ],
       ),
     ) ?? false;

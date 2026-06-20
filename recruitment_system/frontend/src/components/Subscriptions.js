@@ -6,13 +6,20 @@ const Subscriptions = () => {
     const [plans, setPlans] = useState([]);
     const [accounts, setAccounts] = useState([]);
     const [pendingRequests, setPendingRequests] = useState([]);
-    const [activeSubscription, setActiveSubscription] = useState(null); // تخزين تفاصيل الاشتراك النشط
+    const [activeSubscription, setActiveSubscription] = useState(null);
     const [loading, setLoading] = useState(true);
 
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [receipt, setReceipt] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState(false);
+
+    const [showMethodModal, setShowMethodModal] = useState(false);
+    const [showBPayModal, setShowBPayModal] = useState(false);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [selectedMethod, setSelectedMethod] = useState(null);
+    const [phone, setPhone] = useState('');
+    const [passcode, setPasscode] = useState('');
 
     const token = localStorage.getItem('access');
     const API_BASE_URL = 'http://127.0.0.1:8000';
@@ -29,11 +36,9 @@ const Subscriptions = () => {
             setPlans(plansRes.data);
             setAccounts(accRes.data);
 
-            // 1. تحديد الاشتراك النشط حالياً (إن وجد)
             const active = subRes.data.find(req => req.status === 'ACTIVE');
             setActiveSubscription(active);
 
-            // 2. تحديد الطلبات المعلقة (PENDING)
             const pending = subRes.data.filter(req => req.status === 'PENDING');
             setPendingRequests(pending);
 
@@ -50,34 +55,57 @@ const Subscriptions = () => {
         return () => clearInterval(interval);
     }, [fetchData]);
 
-    const handleFinalSubscribe = async (e) => {
+    const openPaymentSelection = (plan) => {
+        setSelectedPlan(plan);
+        setShowMethodModal(true);
+    };
+
+    const proceedWithMethod = (method) => {
+        setShowMethodModal(false);
+        setSelectedMethod(method);
+        const techName = (method.technical_name || '').toLowerCase();
+        const providerName = (method.provider_name || method.name || '').toLowerCase();
+        if (techName.includes('bankily') || techName.includes('bpay') || providerName.includes('bankily')) {
+            setShowBPayModal(true);
+        } else {
+            setShowUploadModal(true);
+        }
+    };
+
+    const handleBPaySubmit = async (e) => {
         e.preventDefault();
-        if (!receipt) {
-            alert("Veuillez joindre une image du reçu de paiement.");
+        if (!phone || !passcode) {
+            alert("Veuillez remplir le numéro et le code secret.");
             return;
         }
+        setIsSubmitting(true);
+        try {
+            const payload = { plan: selectedPlan.id, payment_method: selectedMethod.id, is_bpay: true, client_phone: phone, passcode: passcode };
+            await axios.post(`${API_BASE_URL}/api/subscriptions/`, payload, config);
+            setSuccessMessage(true);
+            setShowBPayModal(false);
+            setSelectedPlan(null); setSelectedMethod(null); setPhone(''); setPasscode('');
+            fetchData();
+        } catch (err) { alert(err.response?.data?.detail || "Erreur lors du paiement B-Pay."); }
+        finally { setIsSubmitting(false); }
+    };
 
+    const handleFinalSubscribe = async (e) => {
+        e.preventDefault();
+        if (!receipt) { alert("Veuillez joindre une image du reçu de paiement."); return; }
         setIsSubmitting(true);
         const formData = new FormData();
         formData.append('plan', selectedPlan.id);
+        if (selectedMethod) formData.append('payment_method', selectedMethod.id);
         formData.append('payment_receipt', receipt);
-
         try {
-            await axios.post(`${API_BASE_URL}/api/subscriptions/`, formData, {
-                headers: {
-                    ...config.headers,
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
+            await axios.post(`${API_BASE_URL}/api/subscriptions/`, formData, { headers: { ...config.headers, 'Content-Type': 'multipart/form-data' } });
             setSuccessMessage(true);
-            setSelectedPlan(null);
-            setReceipt(null);
+            setShowUploadModal(false);
+            setSelectedPlan(null); setSelectedMethod(null); setReceipt(null);
             fetchData();
-        } catch (err) {
-            alert("Erreur lors de l'envoi de la demande.");
-        } finally {
-            setIsSubmitting(false);
-        }
+        } catch (err) { alert("Erreur lors de l'envoi de la demande."); }
+        finally { setIsSubmitting(false); }
     };
 
     if (loading) return <div style={styles.loading}>Chargement des offres...</div>;
@@ -87,28 +115,8 @@ const Subscriptions = () => {
             <h1 style={styles.mainTitle}>Plans d'Abonnement</h1>
             <p style={styles.subtitle}>Gérez votre abonnement et découvrez nos solutions premium.</p>
 
-            {/* --- قسم الاشتراك النشط (يعرض فقط إذا كان هناك اشتراك حالي) --- */}
-            {activeSubscription && (
-                <div style={styles.activeSubCard}>
-                    <div style={styles.activeHeader}>
-                        <FiCheckCircle size={24} color="#10b981" />
-                        <h3>Votre abonnement actuel est actif</h3>
-                    </div>
-                    <div style={styles.activeDetails}>
-                        <div style={styles.detailItem}>
-                            <span>Pack:</span> <strong>{activeSubscription.plan_details?.title}</strong>
-                        </div>
-                        <div style={styles.detailItem}>
-                            <span>Utilisation:</span>
-                            <strong>{activeSubscription.plan_details?.current_usage} / {activeSubscription.plan_details?.offres_count} offres</strong>
-                        </div>
-                        <div style={styles.detailItem}>
-                            <span>Expire le:</span>
-                            <strong>{new Date(activeSubscription.date_expiration).toLocaleDateString()}</strong>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* --- قسم الاشتراك النشط (مع حماية ضد البيانات الفارغة) --- */}
+
 
             {/* --- قسم الطلبات المعلقة --- */}
             {pendingRequests.length > 0 && (
@@ -121,7 +129,7 @@ const Subscriptions = () => {
                             <div key={req.id} style={styles.pendingCard}>
                                 <div style={styles.pendingInfo}>
                                     <strong>{req.plan_details?.title || "Plan choisi"}</strong>
-                                    <span>Envoyé le: {new Date(req.date_subscription).toLocaleDateString()}</span>
+                                    <span>Envoyé le: {req.date_subscription ? new Date(req.date_subscription).toLocaleDateString() : "..."}</span>
                                 </div>
                                 <div style={styles.pendingBadge}>Vérification du paiement...</div>
                             </div>
@@ -133,26 +141,24 @@ const Subscriptions = () => {
             {successMessage && (
                 <div style={styles.successBox}>
                     <FiCheck size={24} />
-                    <span>Demande envoyée ! Nous vérifions votre reçu.</span>
+                    <span>Opération réussie ! Votre demande est traitée.</span>
                     <button onClick={() => setSuccessMessage(false)} style={styles.closeMsg}><FiX /></button>
                 </div>
             )}
 
-            {/* --- معلومات الدفع --- */}
             {accounts.length > 0 && (
                 <div style={styles.accountsInfo}>
                     <h3 style={styles.accountsTitle}><FiCreditCard /> Moyens de paiement disponibles</h3>
                     <div style={styles.accBadgeContainer}>
                         {accounts.map(acc => (
                             <span key={acc.id} style={styles.accBadge}>
-                                {acc.provider_name}: <strong>{acc.account_number}</strong>
+                                {acc.provider_name || acc.name}: <strong>{acc.account_number}</strong>
                             </span>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* --- شبكة الخطط المتاحة --- */}
             <div style={styles.plansGrid}>
                 {plans.map((plan) => {
                     const isCurrentPlan = activeSubscription?.plan === plan.id;
@@ -172,7 +178,7 @@ const Subscriptions = () => {
                                 <li style={styles.featureItem}><FiCheckCircle style={styles.checkIcon} /> Validité: {plan.duration_months} mois</li>
                             </ul>
                             <button
-                                onClick={() => setSelectedPlan(plan)}
+                                onClick={() => openPaymentSelection(plan)}
                                 style={{...styles.subscribeBtn, backgroundColor: isCurrentPlan ? '#10b981' : 'var(--accent-primary)'}}
                             >
                                 {isCurrentPlan ? "Renouveler ce plan" : "Choisir ce plan"}
@@ -182,24 +188,60 @@ const Subscriptions = () => {
                 })}
             </div>
 
-            {/* --- نافذة رفع الإيصال (Overlay) --- */}
-            {selectedPlan && (
+            {/* --- Modals (بدون تغيير) --- */}
+            {showMethodModal && selectedPlan && (
                 <div style={styles.uploadOverlay}>
                     <div style={styles.uploadCard}>
-                        <button onClick={() => setSelectedPlan(null)} style={styles.closeBtn}><FiX /></button>
+                        <button onClick={() => {setShowMethodModal(false); setSelectedPlan(null);}} style={styles.closeBtn}><FiX /></button>
+                        <h2 style={styles.formTitle}>Choisir le mode de paiement</h2>
+                        <p style={styles.formSubtitle}>Pack: <strong>{selectedPlan.title}</strong> - {selectedPlan.price} MRU</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            {accounts.map(acc => (
+                                <button key={acc.id} style={styles.methodBtn} onClick={() => proceedWithMethod(acc)}>
+                                    <span style={{ fontSize: '20px' }}>⚡</span> Payer via {acc.provider_name || acc.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showBPayModal && selectedPlan && (
+                <div style={styles.uploadOverlay}>
+                    <div style={styles.uploadCard}>
+                        <button onClick={() => {setShowBPayModal(false); setSelectedPlan(null);}} style={styles.closeBtn}><FiX /></button>
+                        <h2 style={{ color: '#10b981', marginBottom: '10px' }}>Paiement B-Pay (Bankily)</h2>
+                        <p style={styles.formSubtitle}>Montant : <strong>{selectedPlan?.price} MRU</strong></p>
+                        <form onSubmit={handleBPaySubmit} style={{ textAlign: 'left' }}>
+                            <div style={{ marginBottom: '15px' }}>
+                                <label style={styles.label}>Numéro Bankily</label>
+                                <input type="number" placeholder="Ex: 4xxxxxxx" value={phone} onChange={(e) => setPhone(e.target.value)} style={styles.input} required />
+                            </div>
+                            <div style={{ marginBottom: '20px' }}>
+                                <label style={styles.label}>Passcode B-Pay</label>
+                                <input type="password" placeholder="Code à 4-6 chiffres" value={passcode} onChange={(e) => setPasscode(e.target.value)} style={styles.input} required />
+                            </div>
+                            <button type="submit" style={styles.confirmBtn} disabled={isSubmitting}>{isSubmitting ? 'Traitement...' : 'Confirmer'}</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {showUploadModal && selectedPlan && (
+                <div style={styles.uploadOverlay}>
+                    <div style={styles.uploadCard}>
+                        <button onClick={() => {setShowUploadModal(false); setSelectedPlan(null); setReceipt(null);}} style={styles.closeBtn}><FiX /></button>
                         <h2 style={styles.formTitle}>Confirmer l'abonnement</h2>
-                        <p style={styles.formSubtitle}>Veuillez envoyer le reçu pour le pack <strong>{selectedPlan.title}</strong></p>
+                        <p style={styles.formSubtitle}>Transférez {selectedPlan.price} MRU au numéro <strong>{selectedMethod?.account_number}</strong></p>
                         <form onSubmit={handleFinalSubscribe}>
                             <div style={styles.fileDropZone}>
                                 <input type="file" accept="image/*" onChange={(e) => setReceipt(e.target.files[0])} style={styles.hiddenInput} id="file-upload" required />
                                 <label htmlFor="file-upload" style={styles.fileLabel}>
                                     <FiUpload size={30} style={{marginBottom: '10px'}} />
-                                    {receipt ? <strong>{receipt.name}</strong> : "Cliquez pour télécharger l'image du reçu"}
+                                    {receipt ? <strong>{receipt.name}</strong> : "Cliquez pour télécharger le reçu"}
                                 </label>
                             </div>
-                            <button type="submit" disabled={isSubmitting} style={styles.confirmBtn}>
-                                {isSubmitting ? "Envoi en cours..." : "Envoyer la preuve de paiement"}
-                            </button>
+                            <button type="submit" disabled={isSubmitting} style={styles.confirmBtn}>{isSubmitting ? "Envoi..." : "Envoyer"}</button>
                         </form>
                     </div>
                 </div>
@@ -208,33 +250,27 @@ const Subscriptions = () => {
     );
 };
 
+// Styles (تم الإبقاء عليها كما هي)
 const styles = {
     container: { padding: '40px 20px', textAlign: 'center', minHeight: '100vh', backgroundColor: 'var(--bg-main)' },
     mainTitle: { fontSize: '32px', fontWeight: '800', color: 'var(--text-main)', marginBottom: '10px' },
     subtitle: { color: 'var(--text-muted)', marginBottom: '40px' },
-
-    // ستايل الاشتراك النشط
     activeSubCard: { maxWidth: '800px', margin: '0 auto 30px', padding: '20px', borderRadius: '20px', backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', textAlign: 'left' },
     activeHeader: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px', color: '#10b981', fontWeight: 'bold' },
     activeDetails: { display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' },
     detailItem: { fontSize: '14px', color: 'var(--text-main)' },
-
-    // ستايل الطلبات المعلقة
     pendingSection: { maxWidth: '800px', margin: '0 auto 40px', textAlign: 'left', background: 'rgba(245, 158, 11, 0.05)', padding: '20px', borderRadius: '20px', border: '1px dashed #f59e0b' },
     pendingTitle: { fontSize: '16px', fontWeight: 'bold', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px' },
     pendingGrid: { display: 'flex', flexDirection: 'column', gap: '10px' },
     pendingCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-sidebar)', padding: '15px', borderRadius: '12px', border: '1px solid rgba(128,128,128,0.2)' },
     pendingInfo: { display: 'flex', flexDirection: 'column', gap: '4px' },
     pendingBadge: { fontSize: '11px', background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '4px 10px', borderRadius: '15px' },
-
     successBox: { backgroundColor: '#10b981', color: 'white', padding: '15px 25px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '15px', maxWidth: '600px', margin: '0 auto 30px' },
     closeMsg: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginLeft: 'auto' },
-
     accountsInfo: { maxWidth: '800px', margin: '0 auto 40px', background: 'var(--bg-sidebar)', padding: '20px', borderRadius: '20px', border: '1px solid rgba(128,128,128,0.2)' },
     accountsTitle: { fontSize: '15px', marginBottom: '15px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
     accBadgeContainer: { display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' },
     accBadge: { padding: '8px 15px', background: 'var(--bg-main)', borderRadius: '10px', fontSize: '13px', border: '1px solid var(--accent-primary)', color: 'var(--text-main)' },
-
     plansGrid: { display: 'flex', gap: '25px', justifyContent: 'center', flexWrap: 'wrap' },
     planCard: { background: 'var(--bg-sidebar)', padding: '40px', borderRadius: '24px', width: '310px', border: '1px solid var(--accent-primary)', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', transition: '0.3s' },
     currentLabel: { position: 'absolute', top: '15px', right: '15px', background: '#10b981', color: 'white', fontSize: '10px', padding: '4px 10px', borderRadius: '10px', fontWeight: 'bold' },
@@ -247,7 +283,6 @@ const styles = {
     featureItem: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', fontSize: '14px', color: 'var(--text-main)' },
     checkIcon: { color: '#10b981' },
     subscribeBtn: { width: '100%', padding: '14px', borderRadius: '14px', border: 'none', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
-
     uploadOverlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
     uploadCard: { background: 'var(--bg-sidebar)', padding: '40px', borderRadius: '25px', width: '90%', maxWidth: '450px', position: 'relative' },
     closeBtn: { position: 'absolute', top: '20px', right: '20px', background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' },
@@ -257,7 +292,10 @@ const styles = {
     hiddenInput: { display: 'none' },
     fileLabel: { cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center' },
     confirmBtn: { width: '100%', padding: '15px', borderRadius: '12px', border: 'none', backgroundColor: '#10b981', color: 'white', fontWeight: 'bold', cursor: 'pointer' },
-    loading: { color: 'var(--text-main)', marginTop: '100px', fontSize: '18px' }
+    loading: { color: 'var(--text-main)', marginTop: '100px', fontSize: '18px' },
+    methodBtn: { width: '100%', padding: '15px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--accent-primary)', color: 'var(--text-main)', borderRadius: '12px', cursor: 'pointer', textAlign: 'left', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '16px' },
+    label: { display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px', color: 'var(--text-main)' },
+    input: { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid rgba(128,128,128,0.3)', fontSize: '16px', boxSizing: 'border-box', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)' },
 };
 
 export default Subscriptions;

@@ -25,6 +25,38 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     fetchData();
   }
 
+  // نظام الفتح الذكي للتطبيقات البنكية (لا يتغير، لضمان وصول الأدمن للتطبيقات)
+  Future<void> _launchBankApp(String techName, String currentLang) async {
+    final Map<String, Map<String, String>> bankConfig = {
+      'bankily': {'scheme': 'bankily://', 'package': 'com.bim.bankily'},
+      'masrvi': {'scheme': 'masrvi://', 'package': 'com.mauripost.masrvi'},
+      'sedad': {'scheme': 'sedad://', 'package': 'com.bms.sedad'},
+    };
+
+    final String key = techName.toLowerCase();
+    if (!bankConfig.containsKey(key)) {
+      String msg = currentLang == 'ar'
+          ? "هذا الحساب لا يدعم الفتح التلقائي"
+          : "Ce compte ne supporte pas l'ouverture automatique";
+      _showSnackBar(msg);
+      return;
+    }
+
+    final String package = bankConfig[key]!['package']!;
+    final String intentUri = "intent:#Intent;package=$package;end";
+
+    try {
+      bool launched = await launchUrl(Uri.parse(intentUri), mode: LaunchMode.externalApplication);
+      if (!launched) {
+        String msg = currentLang == 'ar' ? "التطبيق غير مثبت على جهازك" : "Application non installée";
+        _showSnackBar(msg);
+      }
+    } catch (e) {
+      String msg = currentLang == 'ar' ? "خطأ أثناء فتح التطبيق" : "Erreur d'ouverture";
+      _showSnackBar(msg);
+    }
+  }
+
   Future<void> fetchData() async {
     if (!mounted) return;
     setState(() => loading = true);
@@ -47,12 +79,12 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
         });
       }
     } catch (e) {
-      debugPrint("Error fetching finance data: $e");
       if (mounted) setState(() => loading = false);
     }
   }
 
-  Future<void> handleVerify(int id, String status) async {
+  // تفعيل أو رفض الاشتراك (يدوياً من قبل الأدمن)
+  Future<void> handleVerify(int id, String status, String currentLang) async {
     try {
       String? token = await _storage.read(key: 'access');
       final response = await http.patch(
@@ -62,70 +94,95 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
       );
 
       if (response.statusCode == 200) {
-        _showSnackBar("Statut mis à jour : $status");
+        String msg = currentLang == 'ar'
+            ? "تم تحديث الحالة: ${status == 'ACTIVE' ? 'تفعيل' : 'رفض'}"
+            : "Statut mis à jour: $status";
+        _showSnackBar(msg);
         fetchData();
       }
     } catch (e) {
-      _showSnackBar("Erreur lors de la validation");
+      String msg = currentLang == 'ar' ? "حدث خطأ أثناء التأكيد" : "Erreur de validation";
+      _showSnackBar(msg);
     }
   }
 
-  Future<void> handleDelete(String endpoint, int id) async {
-    bool confirm = await _showConfirmDialog("Supprimer cet élément ?");
+  Future<void> handleDelete(String endpoint, int id, String currentLang) async {
+    String confirmMsg = currentLang == 'ar' ? "هل تريد حذف هذا العنصر؟" : "Supprimer cet élément ?";
+    bool confirm = await _showConfirmDialog(confirmMsg, currentLang);
     if (!confirm) return;
-
     try {
       String? token = await _storage.read(key: 'access');
       final response = await http.delete(
         Uri.parse('${ApiConfig.baseUrl}/api/$endpoint/$id/'),
         headers: {'Authorization': 'Bearer $token'},
       );
-
       if (response.statusCode == 204 || response.statusCode == 200) {
+        String msg = currentLang == 'ar' ? "تم الحذف" : "Supprimé";
+        _showSnackBar(msg);
         fetchData();
       }
     } catch (e) {
-      _showSnackBar("Erreur lors de la suppression");
+      String msg = currentLang == 'ar' ? "حدث خطأ أثناء الحذف" : "Erreur lors de la suppression";
+      _showSnackBar(msg);
     }
   }
 
-  void _showAddAccountDialog() {
+  // --- واجهة إضافة حساب استقبال جديد (مهمة جداً للـ B-Pay) ---
+  void _showAddAccountDialog(String currentLang) {
     final nameController = TextEditingController();
     final numberController = TextEditingController();
+    final holderController = TextEditingController(text: "Admin");
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
-        title: Text("Nouveau Compte", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildTextField(nameController, "Nom de la Banque", isDark),
-            const SizedBox(height: 10),
-            _buildTextField(numberController, "Numéro de Compte", isDark, isNumber: true),
-          ],
+        title: Text(currentLang == 'ar' ? "حساب استقبال جديد" : "Nouveau Compte de Réception"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildTextField(nameController, currentLang == 'ar' ? "الاسم (مثال: Bankily)" : "Nom (ex: Bankily)", isDark),
+              const SizedBox(height: 10),
+              _buildTextField(numberController, currentLang == 'ar' ? "كود التاجر / رقم الحساب" : "Code Commerçant / Numéro", isDark, isNumber: true),
+              const SizedBox(height: 10),
+              _buildTextField(holderController, currentLang == 'ar' ? "اسم صاحب الحساب" : "Titulaire", isDark),
+            ],
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Annuler", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(currentLang == 'ar' ? "إلغاء" : "Annuler")
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary),
             onPressed: () async {
+              String nameInput = nameController.text.trim().toLowerCase();
+              String techName = 'other';
+              // تحديد الاسم التقني لربطه بنظام B-Pay في الـ Backend
+              if (nameInput.contains('bankily')) techName = 'bankily';
+              else if (nameInput.contains('masrvi')) techName = 'masrvi';
+              else if (nameInput.contains('sedad')) techName = 'sedad';
+
               await _submitNewItem('payment-methods/', {
-                'provider_name': nameController.text,
-                'account_number': numberController.text,
-              });
+                'provider_name': nameController.text.trim(),
+                'account_number': numberController.text.trim(),
+                'technical_name': techName,
+                'account_holder': holderController.text.trim(),
+                'is_active': true,
+              }, currentLang);
               if (mounted) Navigator.pop(ctx);
             },
-            child: const Text("Enregistrer"),
+            child: Text(currentLang == 'ar' ? "حفظ" : "Enregistrer", style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
-  void _showAddPlanDialog() {
+  void _showAddPlanDialog(String currentLang) {
     final titleController = TextEditingController();
     final priceController = TextEditingController();
     final offersController = TextEditingController();
@@ -136,61 +193,58 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
-        title: Text("Créer un Plan", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 18)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildTextField(titleController, "Titre", isDark),
-              const SizedBox(height: 10),
-              _buildTextField(priceController, "Prix (MRU)", isDark, isNumber: true),
-              const SizedBox(height: 10),
-              _buildTextField(offersController, "Nombre d'offres", isDark, isNumber: true),
-              const SizedBox(height: 10),
-              _buildTextField(durationController, "Durée (Mois)", isDark, isNumber: true),
-            ],
-          ),
+        title: Text(currentLang == 'ar' ? "باقة اشتراك جديدة" : "Nouveau Plan"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildTextField(titleController, currentLang == 'ar' ? "العنوان" : "Titre", isDark),
+            const SizedBox(height: 10),
+            _buildTextField(priceController, currentLang == 'ar' ? "السعر (أوقية)" : "Prix (MRU)", isDark, isNumber: true),
+            const SizedBox(height: 10),
+            _buildTextField(offersController, currentLang == 'ar' ? "عدد العروض المتاحة" : "Nombre d'offres", isDark, isNumber: true),
+            const SizedBox(height: 10),
+            _buildTextField(durationController, currentLang == 'ar' ? "المدة (بالأشهر)" : "Durée (Mois)", isDark, isNumber: true),
+          ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("Fermer", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(currentLang == 'ar' ? "إغلاق" : "Fermer")
+          ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () async {
               await _submitNewItem('subscription-plans/', {
-                'title': titleController.text,
-                'price': priceController.text,
-                'offres_count': offersController.text,
-                'duration_months': durationController.text,
-              });
+                'title': titleController.text.trim(),
+                'price': priceController.text.trim(),
+                'offres_count': offersController.text.trim(),
+                'duration_months': durationController.text.trim(),
+              }, currentLang);
               if (mounted) Navigator.pop(ctx);
             },
-            child: const Text("Activer"),
+            child: Text(currentLang == 'ar' ? "إضافة" : "Créer", style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _submitNewItem(String endpoint, Map<String, dynamic> data) async {
+  Future<void> _submitNewItem(String endpoint, Map<String, dynamic> data, String currentLang) async {
     try {
       String? token = await _storage.read(key: 'access');
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/$endpoint'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
+        headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
         body: jsonEncode(data),
       );
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        _showSnackBar("Ajouté avec succès");
+      if (response.statusCode == 201) {
+        String msg = currentLang == 'ar' ? "تمت الإضافة بنجاح!" : "Ajouté !";
+        _showSnackBar(msg);
         fetchData();
-      } else {
-        _showSnackBar("Erreur lors de l'ajout");
       }
     } catch (e) {
-      _showSnackBar("Erreur de connexion");
+      String msg = currentLang == 'ar' ? "حدث خطأ ما" : "Erreur";
+      _showSnackBar(msg);
     }
   }
 
@@ -198,12 +252,11 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     return TextField(
       controller: controller,
       keyboardType: isNumber ? TextInputType.number : TextInputType.text,
-      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+      style: TextStyle(color: isDark ? Colors.white : Colors.black),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.black26, fontSize: 14),
         filled: true,
-        fillColor: isDark ? Colors.black12 : Colors.grey.withOpacity(0.1),
+        fillColor: isDark ? Colors.black26 : Colors.grey[200],
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
       ),
     );
@@ -214,206 +267,114 @@ class _ManagePaymentsScreenState extends State<ManagePaymentsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Administration Financière", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
+        title: Text(currentLang == 'ar' ? "إدارة المالية" : "Gestion Finance"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_card, color: ApiConfig.kPrimary),
-            onPressed: () => _showAddAccountDialog(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.playlist_add, color: Colors.orange),
-            onPressed: () => _showAddPlanDialog(),
-          ),
+          IconButton(icon: const Icon(Icons.add_card, color: ApiConfig.kPrimary), onPressed: () => _showAddAccountDialog(currentLang)),
+          IconButton(icon: const Icon(Icons.playlist_add, color: Colors.orange), onPressed: () => _showAddPlanDialog(currentLang)),
         ],
       ),
       body: loading
-          ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
-          : RefreshIndicator(
-              onRefresh: fetchData,
-              color: ApiConfig.kPrimary,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildSectionHeader(Icons.credit_card, "Comptes de Réception", isDark),
-                  _buildAccountsList(theme, isDark),
-                  const SizedBox(height: 25),
-                  _buildSectionHeader(Icons.layers, "Packs d'Abonnement", isDark),
-                  _buildPlansList(theme, isDark),
-                  const SizedBox(height: 25),
-                  _buildSectionHeader(Icons.verified_user, "Vérification des reçus", isDark),
-                  _buildVerificationList(theme, isDark),
-                ],
-              ),
+        ? const Center(child: CircularProgressIndicator())
+        : RefreshIndicator(
+            onRefresh: fetchData,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _buildSectionHeader(Icons.account_balance, currentLang == 'ar' ? "حسابات الاستقبال" : "Comptes Réception", isDark),
+                _buildAccountsList(theme, isDark, currentLang),
+                const SizedBox(height: 20),
+                _buildSectionHeader(Icons.list_alt, currentLang == 'ar' ? "باقات الاشتراك" : "Plans d'Abonnement", isDark),
+                _buildPlansList(theme, isDark, currentLang),
+                const SizedBox(height: 20),
+                _buildSectionHeader(Icons.pending, currentLang == 'ar' ? "الطلبات قيد الانتظار" : "Demandes en attente", isDark),
+                _buildVerificationList(theme, isDark, currentLang),
+              ],
             ),
+          ),
     );
   }
 
   Widget _buildSectionHeader(IconData icon, String title, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, color: isDark ? Colors.white24 : Colors.black26, size: 20),
-          const SizedBox(width: 8),
-          Text(title, style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(children: [Icon(icon, color: ApiConfig.kPrimary), const SizedBox(width: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))]),
     );
   }
 
-  Widget _buildAccountsList(ThemeData theme, bool isDark) {
-    return SizedBox(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: accounts.length,
-        itemBuilder: (context, index) {
-          final acc = accounts[index];
-          return Container(
-            width: 250,
-            margin: const EdgeInsets.only(right: 15),
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
-              boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
-            ),
-            child: Row(
-              children: [
-                const CircleAvatar(backgroundColor: ApiConfig.kPrimary, child: Icon(Icons.attach_money, color: Colors.white)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(acc['provider_name'], style: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontSize: 11)),
-                      Text(acc['account_number'], style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 16)),
-                    ],
-                  ),
-                ),
-                IconButton(icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20), onPressed: () => handleDelete("payment-methods", acc['id'])),
-              ],
-            ),
-          );
-        },
-      ),
-    );
+  Widget _buildAccountsList(ThemeData theme, bool isDark, String currentLang) {
+    return Column(children: accounts.map((acc) => Card(
+      child: ListTile(
+        leading: const Icon(Icons.account_balance),
+        title: Text(acc['provider_name']),
+        subtitle: Text(acc['account_number']),
+        trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => handleDelete("payment-methods", acc['id'], currentLang)),
+        onTap: () => _launchBankApp(acc['technical_name'], currentLang),
+      ))).toList());
   }
 
-  Widget _buildPlansList(ThemeData theme, bool isDark) {
-    return Column(
-      children: plans.map((plan) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(12),
-          border: const Border(left: BorderSide(color: Colors.orange, width: 4)),
-          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
-        ),
-        child: ListTile(
-          leading: const Icon(Icons.card_membership, color: Colors.orange),
-          title: Text(plan['title'], style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-          subtitle: Text("${plan['price']} MRU / ${plan['duration_months']} Mois", style: TextStyle(color: isDark ? Colors.white38 : Colors.black45, fontSize: 12)),
-          trailing: IconButton(icon: Icon(Icons.delete_sweep, color: isDark ? Colors.white24 : Colors.black26), onPressed: () => handleDelete("subscription-plans", plan['id'])),
-        ),
-      )).toList(),
-    );
+  Widget _buildPlansList(ThemeData theme, bool isDark, String currentLang) {
+    return Column(children: plans.map((plan) => Card(
+      child: ListTile(
+        title: Text(plan['title']),
+        subtitle: Text("${plan['price']} ${currentLang == 'ar' ? 'أوقية' : 'MRU'}"),
+        trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => handleDelete("subscription-plans", plan['id'], currentLang)),
+      ))).toList());
   }
 
-  Widget _buildVerificationList(ThemeData theme, bool isDark) {
-    return Column(
-      children: subscriptions.map((sub) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
+  Widget _buildVerificationList(ThemeData theme, bool isDark, String currentLang) {
+    if (subscriptions.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Text(currentLang == 'ar' ? "لا توجد طلبات معلقة" : "Aucune demande"),
+      );
+    }
+    return Column(children: subscriptions.map((sub) => Card(
+      child: Column(children: [
+        ListTile(
+          title: Text(sub['enterprise_name'] ?? (currentLang == 'ar' ? "منشأة" : "Entreprise")),
+          subtitle: Text(
+            currentLang == 'ar'
+                ? "الباقة: ${sub['plan_title']} - الرمز: ${sub['transaction_ref']}"
+                : "Plan: ${sub['plan_title']} - Réf: ${sub['transaction_ref']}"
+          ),
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(sub['enterprise_name'], style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(color: ApiConfig.kPrimary.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
-                    child: Text(sub['plan_title'], style: const TextStyle(color: ApiConfig.kPrimary, fontSize: 10, fontWeight: FontWeight.bold)),
-                  )
-                ],
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => _showReceiptPreview(sub['payment_receipt']),
-              icon: const Icon(Icons.image, size: 16, color: Colors.amber),
-              label: const Text("Reçu", style: TextStyle(color: Colors.amber, fontSize: 12)),
-            ),
-            IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: () => handleVerify(sub['id'], 'ACTIVE')),
-            IconButton(icon: const Icon(Icons.cancel, color: Colors.redAccent), onPressed: () => handleVerify(sub['id'], 'REJECTED')),
-          ],
-        ),
-      )).toList(),
-    );
-  }
-
-  void _showReceiptPreview(String url) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: Image.network("${ApiConfig.baseUrl}$url",
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 100, color: isDark ? Colors.white24 : Colors.black26),
-              ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: ApiConfig.kPrimary, foregroundColor: Colors.white),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("Fermer")
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<bool> _showConfirmDialog(String msg) async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
-        title: Text("Confirmation", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
-        content: Text(msg, style: TextStyle(color: isDark ? Colors.white70 : Colors.black54)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("Non", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Oui", style: TextStyle(color: Colors.redAccent))),
-        ],
-      ),
-    ) ?? false;
+        Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          TextButton(
+            onPressed: () => handleVerify(sub['id'], 'REJECTED', currentLang),
+            child: Text(currentLang == 'ar' ? "رفض" : "Rejeter", style: const TextStyle(color: Colors.red))
+          ),
+          ElevatedButton(
+            onPressed: () => handleVerify(sub['id'], 'ACTIVE', currentLang),
+            child: Text(currentLang == 'ar' ? "تفعيل" : "Valider")
+          ),
+        ])
+      ]))).toList());
   }
 
   void _showSnackBar(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    }
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<bool> _showConfirmDialog(String msg, String currentLang) async {
+    return await showDialog(context: context, builder: (ctx) => AlertDialog(
+      backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E232D) : Colors.white,
+      title: Text(currentLang == 'ar' ? "تأكيد" : "Confirmation"),
+      content: Text(msg),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: Text(currentLang == 'ar' ? "لا" : "Non")
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: Text(currentLang == 'ar' ? "نعم" : "Oui")
+        ),
+      ]
+    )) ?? false;
   }
 }

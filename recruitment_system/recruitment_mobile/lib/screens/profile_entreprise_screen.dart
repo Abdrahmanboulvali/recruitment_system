@@ -83,7 +83,7 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
     }
   }
 
-  Future<void> _handleSave() async {
+  Future<void> _handleSave(String currentLang) async {
     setState(() => _isLoading = true);
     try {
       String? token = await _storage.read(key: 'access');
@@ -112,7 +112,8 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
         _fetchData(entreprise!['id']);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Erreur lors de l'enregistrement")));
+      String errorMsg = currentLang == 'ar' ? "حدث خطأ أثناء حفظ البيانات" : "Erreur lors de l'enregistrement";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMsg)));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -120,7 +121,10 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary)));
 
     // التحقق هل المستخدم هو صاحب الشركة
     final isOwner = userData != null && entreprise != null &&
@@ -131,11 +135,11 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
-        title: const Text("Profil Entreprise"),
+        title: Text(currentLang == 'ar' ? "ملف الشركة" : "Profil Entreprise"),
         actions: [
           if (isOwner)
             _isEditing
-                ? IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: _handleSave)
+                ? IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: () => _handleSave(currentLang))
                 : IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() => _isEditing = true))
         ],
       ),
@@ -160,8 +164,15 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
                       borderRadius: BorderRadius.circular(33),
                       child: _selectedImage != null
                           ? Image.file(_selectedImage!, fit: BoxFit.cover)
-                          : (entreprise!['logo'] != null && !_removeLogo)
-                              ? Image.network("${ApiConfig.baseUrl}${entreprise!['logo']}", fit: BoxFit.cover)
+                          : (entreprise!['logo'] != null && entreprise!['logo'].toString().isNotEmpty && !_removeLogo)
+                              ? Image.network(
+                                  // التعديل هنا: دمج ذكي للرابط
+                                  entreprise!['logo'].toString().startsWith('http')
+                                      ? entreprise!['logo']
+                                      : "${ApiConfig.baseUrl.endsWith('/') ? ApiConfig.baseUrl.substring(0, ApiConfig.baseUrl.length - 1) : ApiConfig.baseUrl}${entreprise!['logo'].toString().startsWith('/') ? '' : '/'}${entreprise!['logo']}",
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image)),
+                                )
                               : Center(child: Text(_nameController.text.isNotEmpty ? _nameController.text[0].toUpperCase() : "E", style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary))),
                     ),
                   ),
@@ -178,7 +189,8 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
                     if (entreprise!['logo'] != null || _selectedImage != null)
                       Positioned(
                         bottom: 0,
-                        right: 0,
+                        right: currentLang == 'ar' ? null : 0,
+                        left: currentLang == 'ar' ? 0 : null,
                         child: GestureDetector(
                           onTap: () => setState(() {
                             _selectedImage = null;
@@ -203,11 +215,14 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
                     controller: _nameController,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                    decoration: const InputDecoration(hintText: "Nom de l'entreprise"),
+                    decoration: InputDecoration(hintText: currentLang == 'ar' ? "اسم الشركة" : "Nom de l'entreprise"),
                   )
-                : Text(entreprise!['nom'] ?? "Sans Nom", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
+                : Text(entreprise!['nom'] ?? (currentLang == 'ar' ? "بدون اسم" : "Sans Nom"), style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900)),
 
-            Text("Dirigé par: ${entreprise!['dg_name'] ?? 'Non assigné'}", style: TextStyle(color: Colors.grey[600])),
+            Text(
+              "${currentLang == 'ar' ? 'إدارة: ' : 'Dirigé par: '}${entreprise!['dg_name'] ?? (currentLang == 'ar' ? 'غير محدد' : 'Non assigné')}",
+              style: TextStyle(color: Colors.grey[600]),
+            ),
 
             const SizedBox(height: 40),
 
@@ -222,7 +237,10 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("À propos de nous", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(
+                    currentLang == 'ar' ? "من نحن" : "À propos de nous",
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
+                  ),
                   const SizedBox(height: 15),
                   _isEditing
                       ? TextFormField(
@@ -231,7 +249,7 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
                           decoration: const InputDecoration(border: OutlineInputBorder()),
                         )
                       : Text(
-                          entreprise!['description'] ?? "Aucune description disponible.",
+                          entreprise!['description'] ?? (currentLang == 'ar' ? "لا يوجد وصف متاح." : "Aucune description disponible."),
                           style: const TextStyle(fontSize: 16, height: 1.6),
                         ),
                 ],
@@ -248,7 +266,10 @@ class _ProfileEntrepriseScreenState extends State<ProfileEntrepriseScreen> {
                     _removeLogo = false;
                   }),
                   icon: const Icon(Icons.cancel, color: Colors.red),
-                  label: const Text("Annuler les modifications", style: TextStyle(color: Colors.red)),
+                  label: Text(
+                    currentLang == 'ar' ? "إلغاء التعديلات" : "Annuler les modifications",
+                    style: const TextStyle(color: Colors.red)
+                  ),
                 ),
               )
           ],

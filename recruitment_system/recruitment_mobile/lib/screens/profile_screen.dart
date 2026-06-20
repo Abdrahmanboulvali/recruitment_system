@@ -55,13 +55,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
     } catch (e) {
-      _showSnackBar("Erreur de connexion");
+      final currentLang = Localizations.localeOf(context).languageCode;
+      _showSnackBar(currentLang == 'ar' ? "خطأ في الاتصال بالخادم" : "Erreur de connexion");
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
 
   Future<void> _handleImageAction(bool delete) async {
+    final currentLang = Localizations.localeOf(context).languageCode;
     String? token = await _storage.read(key: 'access');
     var request = http.MultipartRequest('PUT', Uri.parse('${ApiConfig.baseUrl}/api/profile/'));
     request.headers['Authorization'] = 'Bearer $token';
@@ -76,12 +78,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final response = await request.send();
     if (response.statusCode == 200) {
-      _showSnackBar(delete ? "Photo supprimée !" : "Photo mise à jour !");
+      if (delete) {
+        _showSnackBar(currentLang == 'ar' ? "تم حذف الصورة الشخصية!" : "Photo supprimée !");
+      } else {
+        _showSnackBar(currentLang == 'ar' ? "تم تحديث الصورة الشخصية!" : "Photo mise à jour !");
+      }
       _fetchProfile();
     }
   }
 
   Future<void> _saveInfo() async {
+    final currentLang = Localizations.localeOf(context).languageCode;
     String? token = await _storage.read(key: 'access');
     Map<String, String> body = {
       'username': _usernameController.text,
@@ -102,25 +109,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final data = json.decode(res.body);
       if (data['detail'] == "OTP_SENT") {
         setState(() => showOTPField = true);
-        _showSnackBar("Code OTP envoyé à votre email");
+        _showSnackBar(currentLang == 'ar' ? "تم إرسال رمز OTP إلى بريدك الإلكتروني" : "Code OTP envoyé à votre email");
       } else if (res.statusCode == 200) {
         setState(() {
           isEditing = false;
           showOTPField = false;
         });
         _fetchProfile();
-        _showSnackBar("Profil mis à jour !");
+        _showSnackBar(currentLang == 'ar' ? "تم تحديث الملف الشخصي بنجاح!" : "Profil mis à jour !");
       } else {
-        _showSnackBar(data['detail'] ?? "Erreur");
+        _showSnackBar(data['detail'] ?? (currentLang == 'ar' ? "حدث خطأ ما" : "Erreur"));
       }
     } catch (e) {
-      _showSnackBar("Erreur de serveur");
+      _showSnackBar(currentLang == 'ar' ? "حدث خطأ في الخادم" : "Erreur de serveur");
     }
   }
 
   Future<void> _updatePassword() async {
+    final currentLang = Localizations.localeOf(context).languageCode;
     if (_newPassController.text != _confirmPassController.text) {
-      _showSnackBar("Les mots de passe ne correspondent pas");
+      _showSnackBar(currentLang == 'ar' ? "كلمات المرور غير متطابقة" : "Les mots de passe ne correspondent pas");
       return;
     }
     String? token = await _storage.read(key: 'access');
@@ -138,13 +146,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (res.statusCode == 200) {
-      _showSnackBar("Mot de passe changé !");
+      _showSnackBar(currentLang == 'ar' ? "تم تغيير كلمة المرور بنجاح!" : "Mot de passe changé !");
       setState(() => isChangingPassword = false);
       _oldPassController.clear();
       _newPassController.clear();
       _confirmPassController.clear();
     } else {
-      _showSnackBar(json.decode(res.body)['detail'] ?? "Erreur");
+      _showSnackBar(json.decode(res.body)['detail'] ?? (currentLang == 'ar' ? "حدث خطأ ما" : "Erreur"));
     }
   }
 
@@ -159,12 +167,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
     if (isLoading) return Scaffold(backgroundColor: theme.scaffoldBackgroundColor, body: const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary)));
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Mon Profil", style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+        title: Text(
+          currentLang == 'ar' ? "ملفي الشخصي" : "Mon Profil",
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)
+        ),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
@@ -175,8 +189,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               isChangingPassword = false;
               showOTPField = false;
             }),
-            child: Text(isEditing || isChangingPassword ? "Annuler" : "Modifier",
-                  style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)),
+            child: Text(
+              isEditing || isChangingPassword
+                  ? (currentLang == 'ar' ? "إلغاء" : "Annuler")
+                  : (currentLang == 'ar' ? "تعديل" : "Modifier"),
+              style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)
+            ),
           )
         ],
       ),
@@ -194,7 +212,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               _buildAvatarSection(isDark),
               const SizedBox(height: 30),
-              if (!isChangingPassword) _buildInfoSection(isDark, theme) else _buildPasswordSection(isDark),
+              if (!isChangingPassword)
+                _buildInfoSection(isDark, theme, currentLang)
+              else
+                _buildPasswordSection(isDark, currentLang),
             ],
           ),
         ),
@@ -244,18 +265,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoSection(bool isDark, ThemeData theme) {
+  Widget _buildInfoSection(bool isDark, ThemeData theme, String currentLang) {
     return Column(
       children: [
-        _buildInfoCard("Nom d'utilisateur", _usernameController, Icons.person_outline, !isEditing, isDark),
+        _buildInfoCard(currentLang == 'ar' ? "اسم المستخدم" : "Nom d'utilisateur", _usernameController, Icons.person_outline, !isEditing, isDark),
         const SizedBox(height: 15),
-        _buildInfoCard("Adresse Email", _emailController, Icons.email_outlined, !isEditing || showOTPField, isDark),
+        _buildInfoCard(currentLang == 'ar' ? "البريد الإلكتروني" : "Adresse Email", _emailController, Icons.email_outlined, !isEditing || showOTPField, isDark),
         if (showOTPField) ...[
           const SizedBox(height: 15),
-          _buildInfoCard("Code OTP", _otpController, Icons.lock_outline, false, isDark),
+          _buildInfoCard(currentLang == 'ar' ? "رمز الـ OTP" : "Code OTP", _otpController, Icons.lock_outline, false, isDark),
         ],
         const SizedBox(height: 15),
-        _buildRoleBadge(isDark),
+        _buildRoleBadge(isDark, currentLang),
         const SizedBox(height: 25),
         SizedBox(
           width: double.infinity,
@@ -267,22 +288,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: Text(isEditing ? (showOTPField ? "Vérifier OTP" : "Sauvegarder") : "Changer le mot de passe",
-                style: TextStyle(color: isEditing ? Colors.white : ApiConfig.kPrimary, fontWeight: FontWeight.bold)),
+            child: Text(
+              isEditing
+                  ? (showOTPField ? (currentLang == 'ar' ? "التحقق من رمز OTP" : "Vérifier OTP") : (currentLang == 'ar' ? "حفظ التغييرات" : "Sauvegarder"))
+                  : (currentLang == 'ar' ? "تغيير كلمة المرور" : "Changer le mot de passe"),
+              style: TextStyle(color: isEditing ? Colors.white : ApiConfig.kPrimary, fontWeight: FontWeight.bold)
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPasswordSection(bool isDark) {
+  Widget _buildPasswordSection(bool isDark, String currentLang) {
     return Column(
       children: [
-        _buildInfoCard("Ancien mot de passe", _oldPassController, Icons.lock_reset, false, isDark, isPassword: true),
+        _buildInfoCard(currentLang == 'ar' ? "كلمة المرور القديمة" : "Ancien mot de passe", _oldPassController, Icons.lock_reset, false, isDark, isPassword: true),
         const SizedBox(height: 15),
-        _buildInfoCard("Nouveau mot de passe", _newPassController, Icons.vpn_key_outlined, false, isDark, isPassword: true),
+        _buildInfoCard(currentLang == 'ar' ? "كلمة المرور الجديدة" : "Nouveau mot de passe", _newPassController, Icons.vpn_key_outlined, false, isDark, isPassword: true),
         const SizedBox(height: 15),
-        _buildInfoCard("Confirmer", _confirmPassController, Icons.check_circle_outline, false, isDark, isPassword: true),
+        _buildInfoCard(currentLang == 'ar' ? "تأكيد كلمة المرور" : "Confirmer", _confirmPassController, Icons.check_circle_outline, false, isDark, isPassword: true),
         const SizedBox(height: 25),
         SizedBox(
           width: double.infinity,
@@ -293,7 +318,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.all(16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            child: const Text("Mettre à jour le mot de passe", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+              currentLang == 'ar' ? "تحديث كلمة المرور" : "Mettre à jour le mot de passe",
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+            ),
           ),
         ),
       ],
@@ -332,7 +360,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildRoleBadge(bool isDark) {
+  Widget _buildRoleBadge(bool isDark, String currentLang) {
     return Row(
       children: [
         const Icon(Icons.shield_outlined, color: ApiConfig.kPrimary, size: 20),
@@ -340,7 +368,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("RÔLE DU COMPTE", style: TextStyle(fontSize: 9, color: isDark ? Colors.grey : Colors.black54, letterSpacing: 1)),
+            Text(
+              currentLang == 'ar' ? "دور الحساب" : "RÔLE DU COMPTE",
+              style: TextStyle(fontSize: 9, color: isDark ? Colors.grey : Colors.black54, letterSpacing: 1)
+            ),
             const SizedBox(height: 5),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

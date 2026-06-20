@@ -181,6 +181,7 @@ class SubscriptionRequest(models.Model):
     date_subscription = models.DateTimeField(auto_now_add=True)
     expiry_date = models.DateTimeField(null=True, blank=True)
 
+    date_expiration = models.DateTimeField(null=True, blank=True)
     def save(self, *args, **kwargs):
         if not self.transaction_ref:
             # توليد كود قصير وسهل القراءة للمستخدم الموريتاني

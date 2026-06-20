@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api_config.dart';
+import 'verify_otp_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -56,16 +57,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(String currentLang) async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _rePasswordController.text) {
-      _showSnack("Les mots de passe ne correspondent pas.", Colors.red);
+      String passMsg = currentLang == 'ar' ? "كلمات المرور غير متطابقة." : "Les mots de passe ne correspondent pas.";
+      _showSnack(passMsg, Colors.red);
       return;
     }
 
     if (_selectedRole != 'CANDIDAT' && _pickedFile == null) {
-      _showSnack("Veuillez joindre un document d'identification.", Colors.orange);
+      String docMsg = currentLang == 'ar' ? "يرجى إرفاق وثيقة إثبات الهوية." : "Veuillez joindre un document d'identification.";
+      _showSnack(docMsg, Colors.orange);
       return;
     }
 
@@ -94,16 +97,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
-        _showSnack("Inscription réussie! Vérifiez votre OTP.", Colors.green);
+        String successMsg = currentLang == 'ar' ? "تم التسجيل بنجاح! يرجى التحقق من رمز OTP." : "Inscription réussie! Vérifiez votre OTP.";
+        _showSnack(successMsg, Colors.green);
+
+        // التعديل الجوهري هنا: الانتقال مع تمرير الإيميل
         Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) Navigator.pushReplacementNamed(context, '/verify-otp');
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => VerifyOtpScreen(email: _emailController.text.trim()),
+              ),
+            );
+          }
         });
       } else {
-        final errorData = json.decode(utf8.decode(response.bodyBytes));
-        _showSnack(errorData['detail'] ?? "Erreur d'inscription", Colors.red);
+        try {
+          final errorData = json.decode(utf8.decode(response.bodyBytes));
+          String errorMessage = currentLang == 'ar' ? "خطأ في التسجيل" : "Erreur d'inscription";
+
+          if (errorData['email'] != null) {
+            if (errorData['email'] is List && errorData['email'].isNotEmpty) {
+              errorMessage = currentLang == 'ar' ? "هذا البريد الإلكتروني مستخدم بالفعل من قبل حساب آخر." : "Cet e-mail est déjà utilisé par un autre compte.";
+            } else {
+              errorMessage = errorData['email'].toString();
+            }
+          } else if (errorData['username'] != null) {
+            if (errorData['username'] is List && errorData['username'].isNotEmpty) {
+              errorMessage = currentLang == 'ar' ? "اسم المستخدم هذا مأخوذ بالفعل." : "Ce nom d'utilisateur est déjà pris.";
+            } else {
+              errorMessage = errorData['username'].toString();
+            }
+          } else if (errorData['detail'] != null) {
+            errorMessage = errorData['detail'];
+          } else if (errorData['error'] != null) {
+            errorMessage = errorData['error'];
+          }
+
+          _showSnack(errorMessage, Colors.red);
+        } catch (e) {
+          String fallbackErr = currentLang == 'ar' ? "خطأ في التسجيل. يرجى المحاولة مرة أخرى." : "Erreur d'inscription. Veuillez réessayer.";
+          _showSnack(fallbackErr, Colors.red);
+        }
       }
     } catch (e) {
-      _showSnack("Erreur de connexion au serveur.", Colors.red);
+      String serverErr = currentLang == 'ar' ? "خطأ في الاتصال بالخادم." : "Erreur de connexion au serveur.";
+      _showSnack(serverErr, Colors.red);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -117,6 +156,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
     final bgColor = _isDarkMode ? ApiConfig.kBgMain : const Color(0xFFF8FAFC);
     final cardBg = _isDarkMode ? ApiConfig.kBgCard : Colors.white;
     final textColor = _isDarkMode ? Colors.white : const Color(0xFF1E293B);
@@ -125,25 +167,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
       backgroundColor: bgColor,
       body: Stack(
         children: [
-          // إضافة سهم العودة إلى فضاء المترشح
           Positioned(
             top: 40,
-            left: 20,
+            left: currentLang == 'ar' ? null : 20,
+            right: currentLang == 'ar' ? 20 : null,
             child: IconButton(
-              icon: Icon(Icons.arrow_back_ios_new, color: textColor),
+              icon: Icon(
+                currentLang == 'ar' ? Icons.arrow_back_ios_new_rounded : Icons.arrow_back_ios_new,
+                color: textColor
+              ),
               onPressed: () => Navigator.pushReplacementNamed(context, '/espace-candidat'),
             ),
           ),
           Positioned(
             top: 40,
-            right: 20,
+            right: currentLang == 'ar' ? null : 20,
+            left: currentLang == 'ar' ? 20 : null,
             child: ElevatedButton(
               onPressed: _toggleTheme,
               style: ElevatedButton.styleFrom(
                 backgroundColor: ApiConfig.kPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
               ),
-              child: Text(_isDarkMode ? '☀️ Mode Clair' : '🌙 Mode Sombre'),
+              child: Text(
+                _isDarkMode
+                    ? (currentLang == 'ar' ? '☀️ الوضع الفاتح' : '☀️ Mode Clair')
+                    : (currentLang == 'ar' ? '🌙 الوضع الداكن' : '🌙 Mode Sombre')
+              ),
             ),
           ),
           Center(
@@ -168,46 +218,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      Text("Créer un compte",
-                        style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -1)),
+                      Text(
+                        currentLang == 'ar' ? "إنشاء حساب" : "Créer un compte",
+                        style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: textColor, letterSpacing: -1)
+                      ),
                       const SizedBox(height: 10),
-                      Text("Rejoignez notre plateforme",
-                        style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 14)),
+                      Text(
+                        currentLang == 'ar' ? "انضم إلى منصتنا الآن" : "Rejoignez notre plateforme",
+                        style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 14)
+                      ),
                       const SizedBox(height: 35),
 
-                      _buildDropdown(textColor, _isDarkMode),
+                      _buildDropdown(textColor, _isDarkMode, currentLang),
                       const SizedBox(height: 15),
 
-                      _buildInput(_usernameController, "Nom d'utilisateur", Icons.person, _isDarkMode),
+                      _buildInput(_usernameController, currentLang == 'ar' ? "اسم المستخدم" : "Nom d'utilisateur", Icons.person, _isDarkMode, currentLang),
                       const SizedBox(height: 15),
 
-                      _buildInput(_emailController, "E-mail", Icons.email, _isDarkMode, isEmail: true),
+                      _buildInput(_emailController, currentLang == 'ar' ? "البريد الإلكتروني" : "E-mail", Icons.email, _isDarkMode, currentLang, isEmail: true),
                       const SizedBox(height: 15),
 
                       if (_selectedRole != 'CANDIDAT') ...[
-                        _buildInput(_enterpriseController, "Nom de l'organisation", Icons.business, _isDarkMode),
+                        _buildInput(_enterpriseController, currentLang == 'ar' ? "اسم المؤسسة / الشركة" : "Nom de l'organisation", Icons.business, _isDarkMode, currentLang),
                         const SizedBox(height: 15),
-                        _buildFilePicker(textColor, _isDarkMode),
+                        _buildFilePicker(textColor, _isDarkMode, currentLang),
                         const SizedBox(height: 15),
                       ],
 
-                      _buildInput(_passwordController, "Mot de passe", Icons.lock, _isDarkMode, isPass: true),
+                      _buildInput(_passwordController, currentLang == 'ar' ? "كلمة المرور" : "Mot de passe", Icons.lock, _isDarkMode, currentLang, isPass: true),
                       const SizedBox(height: 15),
 
-                      _buildInput(_rePasswordController, "Confirmer le mot de passe", Icons.lock_outline, _isDarkMode, isPass: true),
+                      _buildInput(_rePasswordController, currentLang == 'ar' ? "تأكيد كلمة المرور" : "Confirmer le mot de passe", Icons.lock_outline, _isDarkMode, currentLang, isPass: true),
                       const SizedBox(height: 25),
 
-                      _buildSubmitButton(),
+                      _buildSubmitButton(currentLang),
                       const SizedBox(height: 20),
 
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: RichText(
                           text: TextSpan(
-                            text: "Déjà inscrit ? ",
+                            text: currentLang == 'ar' ? "مسجل بالفعل؟ " : "Déjà inscrit ? ",
                             style: TextStyle(color: textColor.withOpacity(0.7)),
-                            children: const [
-                              TextSpan(text: "Se connecter", style: TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold))
+                            children: [
+                              TextSpan(
+                                text: currentLang == 'ar' ? "تسجيل الدخول" : "Se connecter",
+                                style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)
+                              )
                             ]
                           )
                         ),
@@ -223,13 +280,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildDropdown(Color textColor, bool isDark) {
+  Widget _buildDropdown(Color textColor, bool isDark, String currentLang) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
         color: isDark ? Colors.black.withOpacity(0.3) : Colors.grey[100],
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -237,11 +294,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           dropdownColor: isDark ? ApiConfig.kBgCard : Colors.white,
           isExpanded: true,
           style: TextStyle(color: textColor, fontSize: 15),
-          items: const [
-            DropdownMenuItem(value: 'CANDIDAT', child: Text("Candidat")),
-            DropdownMenuItem(value: 'DG', child: Text("Entreprise Privée")),
-            DropdownMenuItem(value: 'DG_GOV', child: Text("Institution Publique")),
-            DropdownMenuItem(value: 'DG_BUSINESS', child: Text("Entrepreneur / Business")),
+          items: [
+            DropdownMenuItem(value: 'CANDIDAT', child: Text(currentLang == 'ar' ? "مترشح (باحث عن عمل)" : "Candidat")),
+            DropdownMenuItem(value: 'DG', child: Text(currentLang == 'ar' ? "شركة خاصة" : "Entreprise Privée")),
+            DropdownMenuItem(value: 'DG_GOV', child: Text(currentLang == 'ar' ? "مؤسسة عمومية / حكومية" : "Institution Publique")),
+            DropdownMenuItem(value: 'DG_BUSINESS', child: Text(currentLang == 'ar' ? "مقاول / رائد أعمال" : "Entrepreneur / Business")),
           ],
           onChanged: (val) => setState(() => _selectedRole = val!),
         ),
@@ -249,7 +306,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildFilePicker(Color textColor, bool isDark) {
+  Widget _buildFilePicker(Color textColor, bool isDark, String currentLang) {
     return InkWell(
       onTap: _pickFile,
       child: Container(
@@ -261,10 +318,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         child: Row(
           children: [
-            Icon(Icons.upload_file, color: ApiConfig.kPrimary),
+            const Icon(Icons.upload_file, color: ApiConfig.kPrimary),
             const SizedBox(width: 10),
-            Expanded(child: Text(_pickedFile?.name ?? "Document d'identification",
-                style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 14))),
+            Expanded(
+              child: Text(
+                _pickedFile?.name ?? (currentLang == 'ar' ? "وثيقة إثبات الهوية" : "Document d'identification"),
+                style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 14)
+              )
+            ),
             if (_pickedFile != null) const Icon(Icons.check_circle, color: Colors.green, size: 20),
           ],
         ),
@@ -272,16 +333,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon, bool isDark, {bool isPass = false, bool isEmail = false}) {
+  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon, bool isDark, String currentLang, {bool isPass = false, bool isEmail = false}) {
     return TextFormField(
       controller: ctrl,
       obscureText: isPass,
       keyboardType: isEmail ? TextInputType.emailAddress : TextInputType.text,
       style: TextStyle(color: isDark ? Colors.white : Colors.black87),
       validator: (value) {
-        if (value == null || value.isEmpty) return "Ce champ est obligatoire";
-        if (isEmail && !value.contains('@')) return "Email invalide";
-        if (isPass && value.length < 6) return "Minimum 6 caractères";
+        if (value == null || value.isEmpty) {
+          return currentLang == 'ar' ? "هذا الحقل إجباري" : "Ce champ est obligatoire";
+        }
+        if (isEmail && !value.contains('@')) {
+          return currentLang == 'ar' ? "البريد الإلكتروني غير صالحة" : "Email invalide";
+        }
+        if (isPass && value.length < 6) {
+          return currentLang == 'ar' ? "يجب أن تكون 6 أحرف على الأقل" : "Minimum 6 caractères";
+        }
         return null;
       },
       decoration: InputDecoration(
@@ -296,7 +363,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildSubmitButton() {
+  Widget _buildSubmitButton(String currentLang) {
     return Container(
       width: double.infinity,
       height: 55,
@@ -312,7 +379,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ]
       ),
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _handleSubmit,
+        onPressed: _isLoading ? null : () => _handleSubmit(currentLang),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
@@ -320,8 +387,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         child: _isLoading
           ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-          : const Text("S'inscrire", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.white)),
+          : Text(
+              currentLang == 'ar' ? "إنشاء حساب" : "S'inscrire",
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Colors.white)
+            ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _rePasswordController.dispose();
+    _enterpriseController.dispose();
+    super.dispose();
   }
 }

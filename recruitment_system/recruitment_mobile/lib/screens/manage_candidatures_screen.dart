@@ -28,10 +28,14 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     fetchData();
   }
 
-  String cleanComment(String? text) {
-    if (text == null || text.isEmpty) return "Aucune analyse disponible pour le moment.";
-    return text.replaceAll(RegExp(r'O\*NET', caseSensitive: false), "Système")
-               .replaceAll(RegExp(r'Matching', caseSensitive: false), "Analyse");
+  String cleanComment(String? text, String currentLang) {
+    if (text == null || text.isEmpty) {
+      return currentLang == 'ar'
+          ? "لا يوجد تحليل متاح حالياً."
+          : (currentLang == 'en' ? "No analysis available at the moment." : "Aucune analyse disponible pour le moment.");
+    }
+    return text.replaceAll(RegExp(r'O\*NET', caseSensitive: false), currentLang == 'ar' ? "النظام" : (currentLang == 'en' ? "System" : "Système"))
+               .replaceAll(RegExp(r'Matching', caseSensitive: false), currentLang == 'ar' ? "التحليل" : (currentLang == 'en' ? "Analysis" : "Analyse"));
   }
 
   String getFullCvUrl(String? cvPath) {
@@ -105,10 +109,26 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     }).toList();
   }
 
+  // دالة مساعدة لترجمة حالات الترشح المباشرة من قاعدة البيانات
+  String translateStatus(String status, String currentLang) {
+    String lower = status.toLowerCase();
+    if (lower.contains('attente')) {
+      return currentLang == 'ar' ? "قيد الانتظار" : (currentLang == 'en' ? "Pending" : "En attente");
+    } else if (lower.contains('accepté') || lower.contains('accepte')) {
+      return currentLang == 'ar' ? "مقبول" : (currentLang == 'en' ? "Accepted" : "Accepté");
+    } else if (lower.contains('refusé') || lower.contains('refuse')) {
+      return currentLang == 'ar' ? "مرفوض" : (currentLang == 'en' ? "Rejected" : "Refusé");
+    }
+    return status;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
 
     if (loading) return Scaffold(backgroundColor: theme.scaffoldBackgroundColor, body: const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary)));
 
@@ -119,8 +139,10 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Gestion Candidatures",
-          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        title: Text(
+          currentLang == 'ar' ? "إدارة الترشيحات" : (currentLang == 'en' ? "Manage Applications" : "Gestion Candidatures"),
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87),
+        ),
         backgroundColor: Colors.transparent,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         elevation: 0,
@@ -128,10 +150,10 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildSearchAndFilterBox(theme, isDark),
-            _buildSection("Candidatures En Attente", pending, Colors.orange, isDark),
-            _buildSection("Candidatures Acceptées", accepted, Colors.green, isDark),
-            _buildSection("Candidatures Refusées", rejected, Colors.red, isDark),
+            _buildSearchAndFilterBox(theme, isDark, currentLang),
+            _buildSection(currentLang == 'ar' ? "الترشيحات قيد الانتظار" : (currentLang == 'en' ? "Pending Applications" : "Candidatures En Attente"), pending, Colors.orange, isDark, currentLang),
+            _buildSection(currentLang == 'ar' ? "الترشيحات المقبولة" : (currentLang == 'en' ? "Accepted Applications" : "Candidatures Acceptées"), accepted, Colors.green, isDark, currentLang),
+            _buildSection(currentLang == 'ar' ? "الترشيحات المرفوضة" : (currentLang == 'en' ? "Rejected Applications" : "Candidatures Refusées"), rejected, Colors.red, isDark, currentLang),
             const SizedBox(height: 30),
           ],
         ),
@@ -139,7 +161,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  Widget _buildSearchAndFilterBox(ThemeData theme, bool isDark) {
+  Widget _buildSearchAndFilterBox(ThemeData theme, bool isDark, String currentLang) {
     return Container(
       padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.all(16),
@@ -152,13 +174,15 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("RECHERCHE GLOBALE (Nom, Poste, Score)",
-            style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold)),
+          Text(
+            currentLang == 'ar' ? "بحث شامل (الاسم، الوظيفة، النتيجة)" : (currentLang == 'en' ? "GLOBAL SEARCH (Name, Job, Score)" : "RECHERCHE GLOBALE (Nom, Poste, Score)"),
+            style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           TextField(
             style: TextStyle(color: isDark ? Colors.white : Colors.black87),
             decoration: InputDecoration(
-              hintText: "Rechercher partout...",
+              hintText: currentLang == 'ar' ? "ابحث في كل مكان..." : (currentLang == 'en' ? "Search everywhere..." : "Rechercher partout..."),
               hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.black38),
               filled: true,
               fillColor: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
@@ -171,7 +195,10 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("SCORE MINIMUM:", style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text(
+                currentLang == 'ar' ? "الحد الأدنى للمطابقة:" : (currentLang == 'en' ? "MINIMUM SCORE:" : "SCORE MINIMUM:"),
+                style: TextStyle(color: isDark ? Colors.grey : Colors.black54, fontSize: 11, fontWeight: FontWeight.bold)
+              ),
               Text("${minScore.toInt()}%", style: const TextStyle(color: ApiConfig.kPrimary, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -188,7 +215,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  Widget _buildSection(String title, List data, Color color, bool isDark) {
+  Widget _buildSection(String title, List data, Color color, bool isDark, String currentLang) {
     if (data.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,14 +225,14 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
           child: Text("$title (${data.length})",
             style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
         ),
-        ...data.map((can) => _buildCard(can, isDark)).toList(),
+        ...data.map((can) => _buildCard(can, isDark, currentLang)).toList(),
       ],
     );
   }
 
-  Widget _buildCard(Map can, bool isDark) {
-    String name = candidatsMap[can['candidat']] ?? "Inconnu";
-    String job = offresData[can['offre']]?['titre'] ?? "Poste Inconnu";
+  Widget _buildCard(Map can, bool isDark, String currentLang) {
+    String name = candidatsMap[can['candidat']] ?? (currentLang == 'ar' ? "مجهول" : "Inconnu");
+    String job = offresData[can['offre']]?['titre'] ?? (currentLang == 'ar' ? "وظيفة غير معروفة" : "Poste Inconnu");
     double score = (can['score'] as num).toDouble();
     final theme = Theme.of(context);
 
@@ -239,12 +266,14 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                     ? Colors.orange.withOpacity(0.1)
                     : (can['statut'].toString().toLowerCase().contains('accepté') ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1)),
                   borderRadius: BorderRadius.circular(8)),
-                child: Text(can['statut'],
+                child: Text(
+                  translateStatus(can['statut'], currentLang),
                   style: TextStyle(
                     color: can['statut'].toString().toLowerCase().contains('attente')
                       ? Colors.orange
                       : (can['statut'].toString().toLowerCase().contains('accepté') ? Colors.green : Colors.red),
-                    fontSize: 11, fontWeight: FontWeight.bold)),
+                    fontSize: 11, fontWeight: FontWeight.bold),
+                ),
               )
             ],
           ),
@@ -276,8 +305,8 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
               ),
-              onPressed: () => _showDetailsModal(can),
-              child: const Text("Visualiser l'analyse"),
+              onPressed: () => _showDetailsModal(can, currentLang),
+              child: Text(currentLang == 'ar' ? "عرض التحليل" : (currentLang == 'en' ? "View analysis" : "Visualiser l'analyse")),
             ),
           )
         ],
@@ -285,7 +314,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  void _showDetailsModal(Map can) {
+  void _showDetailsModal(Map can, String currentLang) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     String name = candidatsMap[can['candidat']] ?? "";
     String job = offresData[can['offre']]?['titre'] ?? "";
@@ -311,13 +340,16 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
               Text(name, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
               Text(job, style: const TextStyle(color: Colors.grey, fontSize: 16)),
               const SizedBox(height: 25),
-              const Text("Taux de correspondance", style: TextStyle(color: Colors.grey)),
+              Text(currentLang == 'ar' ? "نسبة المطابقة" : (currentLang == 'en' ? "Match rate" : "Taux de correspondance"), style: const TextStyle(color: Colors.grey)),
               Text("${score.toInt()}%", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: ApiConfig.kPrimary)),
               Divider(height: 40, color: isDark ? Colors.white10 : Colors.black12),
 
-              Text("Analyse IA du profil", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)),
+              Text(
+                currentLang == 'ar' ? "تحليل الذكاء الاصطناعي للملف الشخصي" : (currentLang == 'en' ? "AI Analysis of Profile" : "Analyse IA du profil"),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.black87)
+              ),
               const SizedBox(height: 12),
-              Text(cleanComment(can['commentaire_ia']),
+              Text(cleanComment(can['commentaire_ia'], currentLang),
                 style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, height: 1.6, fontSize: 15)),
 
               const SizedBox(height: 30),
@@ -334,7 +366,10 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                   }
                 },
                 icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
-                label: Text("Voir le CV original", style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
+                label: Text(
+                  currentLang == 'ar' ? "عرض السيرة الذاتية الأصلية" : (currentLang == 'en' ? "View original CV" : "Voir le CV original"),
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black87)
+                ),
               ),
 
               const SizedBox(height: 40),
@@ -346,7 +381,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                         backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () => handleUpdateStatus(can['id'], 'Accepté'),
-                      child: const Text("Accepter", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: Text(currentLang == 'ar' ? "قبول" : (currentLang == 'en' ? "Accept" : "Accepter"), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     )),
                     const SizedBox(width: 12),
                     Expanded(child: ElevatedButton(
@@ -354,12 +389,12 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
                         backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () => handleUpdateStatus(can['id'], 'Refusé'),
-                      child: const Text("Refuser", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: Text(currentLang == 'ar' ? "رفض" : (currentLang == 'en' ? "Reject" : "Refuser"), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
                     )),
                   ],
                 )
               else
-                _buildStatusBanner(can['statut'], isDark),
+                _buildStatusBanner(can['statut'], isDark, currentLang),
             ],
           ),
         ),
@@ -367,7 +402,7 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
     );
   }
 
-  Widget _buildStatusBanner(String status, bool isDark) {
+  Widget _buildStatusBanner(String status, bool isDark, String currentLang) {
     bool isAcc = status.toLowerCase().contains('accepté');
     return Container(
       padding: const EdgeInsets.all(18),
@@ -381,8 +416,12 @@ class _ManageCandidaturesScreenState extends State<ManageCandidaturesScreen> {
         children: [
           Icon(isAcc ? Icons.check_circle : Icons.cancel, color: isAcc ? Colors.green : Colors.red, size: 20),
           const SizedBox(width: 10),
-          Text(isAcc ? "Candidature Acceptée" : "Candidature Refusée",
-              style: TextStyle(color: isAcc ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
+          Text(
+            isAcc
+                ? (currentLang == 'ar' ? "تم قبول الترشيح" : (currentLang == 'en' ? "Application Accepted" : "Candidature Acceptée"))
+                : (currentLang == 'ar' ? "تم رفض الترشيح" : (currentLang == 'en' ? "Application Rejected" : "Candidature Refusée")),
+            style: TextStyle(color: isAcc ? Colors.green : Colors.red, fontWeight: FontWeight.bold)
+          ),
         ],
       ),
     );

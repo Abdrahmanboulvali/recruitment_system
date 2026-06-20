@@ -53,9 +53,17 @@ class _UsersScreenState extends State<UsersScreen> {
   }
 
   Future<void> toggleUserStatus(Map user) async {
-    final String action = user['is_active'] ? "désactiver" : "réactiver";
+    final currentLang = Localizations.localeOf(context).languageCode;
 
-    bool confirm = await _showConfirmDialog(action, user['username']);
+    // إعداد نص الإجراء ديناميكياً للغة العربية والفرنسية لتمريره لحوار التأكيد
+    String action;
+    if (currentLang == 'ar') {
+      action = user['is_active'] ? "تعطيل" : "إعادة تفعيل";
+    } else {
+      action = user['is_active'] ? "désactiver" : "réactiver";
+    }
+
+    bool confirm = await _showConfirmDialog(action, user['username'], currentLang);
     if (!confirm) return;
 
     try {
@@ -75,7 +83,9 @@ class _UsersScreenState extends State<UsersScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Erreur lors de la modification")),
+          SnackBar(
+            content: Text(currentLang == 'ar' ? "حدث خطأ أثناء التعديل" : "Erreur lors de la modification")
+          ),
         );
       }
     }
@@ -100,30 +110,42 @@ class _UsersScreenState extends State<UsersScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final currentLang = Localizations.localeOf(context).languageCode;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text("Gestion Utilisateurs",
-          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+        title: Text(
+          currentLang == 'ar' ? "إدارة المستخدمين" : "Gestion Utilisateurs",
+          style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
+        ),
         backgroundColor: Colors.transparent,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         elevation: 0,
       ),
       body: Column(
         children: [
-          _buildFilterBar(theme, isDark),
+          _buildFilterBar(theme, isDark, currentLang),
           Expanded(
             child: loading
                 ? const Center(child: CircularProgressIndicator(color: ApiConfig.kPrimary))
-                : _buildUsersList(isDark),
+                : _buildUsersList(isDark, currentLang),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterBar(ThemeData theme, bool isDark) {
+  Widget _buildFilterBar(ThemeData theme, bool isDark, String currentLang) {
+    // قائمة الخيارات المترجمة للأدوار والحالات مع الحفاظ على القيم الأصلية (Keys) ثابتة لتصفية المصفوفة
+    final Map<String, String> roleLabels = currentLang == 'ar'
+      ? {"ALL": "كل الأدوار", "ADMIN": "مشرف", "CANDIDAT": "مترشح", "DG": "مؤسسة", "SUPER_ADMIN": "مدير عام"}
+      : {"ALL": "Tous les rôles", "ADMIN": "ADMIN", "CANDIDAT": "CANDIDAT", "DG": "DG", "SUPER_ADMIN": "SUPER_ADMIN"};
+
+    final Map<String, String> statusLabels = currentLang == 'ar'
+      ? {"ALL": "كل الحالات", "ACTIVE": "نشط", "INACTIVE": "غير نشط"}
+      : {"ALL": "Tous les statuts", "ACTIVE": "ACTIVE", "INACTIVE": "INACTIVE"};
+
     return Container(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -131,7 +153,7 @@ class _UsersScreenState extends State<UsersScreen> {
           TextField(
             style: TextStyle(color: isDark ? Colors.white : Colors.black87),
             decoration: InputDecoration(
-              hintText: "Rechercher par nom ou email...",
+              hintText: currentLang == 'ar' ? "ابحث بالاسم أو البريد الإلكتروني..." : "Rechercher par nom ou email...",
               hintStyle: TextStyle(color: isDark ? Colors.white24 : Colors.black38, fontSize: 14),
               prefixIcon: Icon(Icons.search, color: isDark ? Colors.white24 : Colors.black38),
               filled: true,
@@ -143,9 +165,29 @@ class _UsersScreenState extends State<UsersScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildDropdown(theme, isDark, "Rôle", roleFilter, ["ALL", "ADMIN", "CANDIDAT", "DG", "SUPER_ADMIN"], (val) => setState(() => roleFilter = val!))),
+              Expanded(
+                child: _buildDropdown(
+                  theme,
+                  isDark,
+                  currentLang == 'ar' ? "الرتبة" : "Rôle",
+                  roleFilter,
+                  ["ALL", "ADMIN", "CANDIDAT", "DG", "SUPER_ADMIN"],
+                  roleLabels,
+                  (val) => setState(() => roleFilter = val!)
+                )
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _buildDropdown(theme, isDark, "Statut", statusFilter, ["ALL", "ACTIVE", "INACTIVE"], (val) => setState(() => statusFilter = val!))),
+              Expanded(
+                child: _buildDropdown(
+                  theme,
+                  isDark,
+                  currentLang == 'ar' ? "الحالة" : "Statut",
+                  statusFilter,
+                  ["ALL", "ACTIVE", "INACTIVE"],
+                  statusLabels,
+                  (val) => setState(() => statusFilter = val!)
+                )
+              ),
             ],
           ),
         ],
@@ -153,7 +195,7 @@ class _UsersScreenState extends State<UsersScreen> {
     );
   }
 
-  Widget _buildDropdown(ThemeData theme, bool isDark, String label, String value, List<String> items, ValueChanged<String?> onChanged) {
+  Widget _buildDropdown(ThemeData theme, bool isDark, String label, String value, List<String> items, Map<String, String> labels, ValueChanged<String?> onChanged) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -168,7 +210,7 @@ class _UsersScreenState extends State<UsersScreen> {
           dropdownColor: theme.cardColor,
           items: items.map((i) => DropdownMenuItem(
             value: i,
-            child: Text(i, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 12))
+            child: Text(labels[i] ?? i, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 12))
           )).toList(),
           onChanged: onChanged,
         ),
@@ -176,21 +218,26 @@ class _UsersScreenState extends State<UsersScreen> {
     );
   }
 
-  Widget _buildUsersList(bool isDark) {
+  Widget _buildUsersList(bool isDark, String currentLang) {
     if (filteredUsers.isEmpty) {
-      return Center(child: Text("Aucun utilisateur trouvé", style: TextStyle(color: isDark ? Colors.white24 : Colors.black26)));
+      return Center(
+        child: Text(
+          currentLang == 'ar' ? "لم يتم العثور على أي مستخدم" : "Aucun utilisateur trouvé",
+          style: TextStyle(color: isDark ? Colors.white24 : Colors.black26)
+        )
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: filteredUsers.length,
       itemBuilder: (context, index) {
         final user = filteredUsers[index];
-        return _buildUserCard(user, isDark);
+        return _buildUserCard(user, isDark, currentLang);
       },
     );
   }
 
-  Widget _buildUserCard(Map user, bool isDark) {
+  Widget _buildUserCard(Map user, bool isDark, String currentLang) {
     bool isActive = user['is_active'] ?? false;
     final theme = Theme.of(context);
 
@@ -232,19 +279,27 @@ class _UsersScreenState extends State<UsersScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Entreprise", style: TextStyle(color: isDark ? Colors.white24 : Colors.black38, fontSize: 10)),
-                    Text(user['enterprise_nom'] ?? "Système", style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)),
+                    Text(
+                      currentLang == 'ar' ? "المؤسسة / الشركة" : "Entreprise",
+                      style: TextStyle(color: isDark ? Colors.white24 : Colors.black38, fontSize: 10)
+                    ),
+                    Text(
+                      user['enterprise_nom'] ?? (currentLang == 'ar' ? "النظام" : "Système"),
+                      style: TextStyle(fontSize: 12, color: isDark ? Colors.white : Colors.black87)
+                    ),
                   ],
                 ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  _buildStatusText(isActive),
+                  _buildStatusText(isActive, currentLang),
                   const SizedBox(height: 5),
                   GestureDetector(
                     onTap: () => toggleUserStatus(user),
                     child: Text(
-                      isActive ? "Désactiver" : "Réactiver",
+                      isActive
+                          ? (currentLang == 'ar' ? "تعطيل الحساب" : "Désactiver")
+                          : (currentLang == 'ar' ? "إعادة تفعيل" : "Réactiver"),
                       style: TextStyle(
                         color: isActive ? Colors.redAccent : Colors.greenAccent,
                         fontWeight: FontWeight.bold,
@@ -270,27 +325,48 @@ class _UsersScreenState extends State<UsersScreen> {
     );
   }
 
-  Widget _buildStatusText(bool isActive) {
+  Widget _buildStatusText(bool isActive, String currentLang) {
     return Row(
       children: [
         Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: isActive ? Colors.green : Colors.grey)),
         const SizedBox(width: 5),
-        Text(isActive ? "Actif" : "Inactif", style: TextStyle(color: isActive ? Colors.green : Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
+        Text(
+          isActive
+              ? (currentLang == 'ar' ? "نشط" : "Actif")
+              : (currentLang == 'ar' ? "غير نشط" : "Inactif"),
+          style: TextStyle(color: isActive ? Colors.green : Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)
+        ),
       ],
     );
   }
 
-  Future<bool> _showConfirmDialog(String action, String username) async {
+  Future<bool> _showConfirmDialog(String action, String username, String currentLang) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1E232D) : Colors.white,
-        title: const Text("Confirmation"),
-        content: Text("Voulez-vous vraiment $action le compte de $username ?"),
+        title: Text(currentLang == 'ar' ? "تأكيد الإجراء" : "Confirmation"),
+        content: Text(
+          currentLang == 'ar'
+              ? "هل أنت متأكد حقاً من أنك تريد $action حساب المستخدم $username؟"
+              : "Voulez-vous vraiment $action le compte de $username ?",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("Annuler", style: TextStyle(color: isDark ? Colors.white54 : Colors.black54))),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: Text(action.toUpperCase(), style: const TextStyle(color: Colors.redAccent))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              currentLang == 'ar' ? "إلغاء" : "Annuler",
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black54)
+            )
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              action.toUpperCase(),
+              style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)
+            )
+          ),
         ],
       ),
     ) ?? false;

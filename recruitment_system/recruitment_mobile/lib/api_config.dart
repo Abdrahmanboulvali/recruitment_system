@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class ApiConfig {
   // --- إعدادات الاتصال ---
   // ملاحظة: إذا كنت تستخدم محاكي أندرويد، استبدل 127.0.0.1 بـ 10.0.2.2
-  static const String baseUrl = "http://127.0.0.1:8000";
+  static const String baseUrl = "https://magician-gauging-pardon.ngrok-free.dev";
 
   // --- ألوان الخلفية والبطاقات (نفس ثيم الويب) ---
   static const Color kBgMain = Color(0xFF0F172A);      // الخلفية العميقة

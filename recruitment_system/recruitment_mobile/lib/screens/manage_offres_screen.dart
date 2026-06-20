@@ -99,9 +99,12 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
     });
   }
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit(String currentLang) async {
     if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Veuillez choisir une date d'expiration")));
+      String dateMsg = currentLang == 'ar'
+          ? "يرجى اختيار تاريخ انتهاء الصلاحية"
+          : "Veuillez choisir une date d'expiration";
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(dateMsg)));
       return;
     }
 
@@ -126,10 +129,18 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         _resetForm();
         _initData();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isEditing ? "Modifiée !" : "Publiée !")));
+        if (mounted) {
+          String successMsg = isEditing
+              ? (currentLang == 'ar' ? "تم التعديل بنجاح!" : "Modifiée !")
+              : (currentLang == 'ar' ? "تم النشر بنجاح!" : "Publiée !");
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMsg)));
+        }
       } else {
         final err = json.decode(response.body);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err['error'] ?? "Erreur")));
+        if (mounted) {
+          String errMsg = err['error'] ?? (currentLang == 'ar' ? "حدث خطأ ما" : "Erreur");
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errMsg)));
+        }
       }
     } catch (e) {
       debugPrint("Submit Error: $e");
@@ -140,6 +151,26 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // معرفة لغة التطبيق الحالية لترجمة محتوى الصفحة بالكامل ديناميكياً
+    final currentLang = Localizations.localeOf(context).languageCode;
+
+    // صياغة نص حالة الاشتراك المترجم ديناميكياً
+    String subStatusText = "";
+    if (subscription != null && subscription!['status'] == 'ACTIVE') {
+      String packTitle = subscription!['plan_details']['title'];
+      int currentUsage = subscription!['plan_details']['current_usage'];
+      int totalOffers = subscription!['plan_details']['offres_count'];
+
+      subStatusText = currentLang == 'ar'
+          ? "✅ باقة نشطة: $packTitle ($currentUsage/$totalOffers)"
+          : "✅ Pack Actif: $packTitle ($currentUsage/$totalOffers)";
+    } else {
+      int currentUsage = subscription?['plan_details']?['current_usage'] ?? 0;
+      subStatusText = currentLang == 'ar'
+          ? "🟠 الوضع المجاني ($currentUsage/3)"
+          : "🟠 Mode Gratuit ($currentUsage/3)";
+    }
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -159,11 +190,12 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Gestion des Offres", style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
             Text(
-              subscription != null && subscription!['status'] == 'ACTIVE'
-                  ? "✅ Pack Actif: ${subscription!['plan_details']['title']} (${subscription!['plan_details']['current_usage']}/${subscription!['plan_details']['offres_count']})"
-                  : "🟠 Mode Gratuit (${subscription?['plan_details']?['current_usage'] ?? 0}/3)",
+              currentLang == 'ar' ? "إدارة العروض" : (currentLang == 'en' ? "Manage Offers" : "Gestion des Offres"),
+              style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
+            ),
+            Text(
+              subStatusText,
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -176,7 +208,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
                 final usage = subscription?['plan_details']?['current_usage'] ?? 0;
                 final limit = subscription?['plan_details']?['offres_count'] ?? 3;
                 if (usage >= limit) {
-                  _showLimitDialog();
+                  _showLimitDialog(currentLang);
                 } else {
                   setState(() => showForm = true);
                 }
@@ -192,16 +224,16 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  if (showForm) _buildGlassForm(theme, isDark),
+                  if (showForm) _buildGlassForm(theme, isDark, currentLang),
                   const SizedBox(height: 20),
-                  ...offres.map((o) => _buildOffreCard(o, theme, isDark)).toList(),
+                  ...offres.map((o) => _buildOffreCard(o, theme, isDark, currentLang)).toList(),
                 ],
               ),
             ),
     );
   }
 
-  Widget _buildGlassForm(ThemeData theme, bool isDark) {
+  Widget _buildGlassForm(ThemeData theme, bool isDark, String currentLang) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -213,14 +245,25 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(isEditing ? "📝 Modifier" : "📌 Nouvelle offre",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+          Text(
+            isEditing
+                ? (currentLang == 'ar' ? "📝 تعديل العرض" : "📝 Modifier")
+                : (currentLang == 'ar' ? "📌 عرض جديد" : "📌 Nouvelle offre"),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)
+          ),
           const SizedBox(height: 15),
-          _buildInput(_titreController, "Titre du poste", isDark),
+          _buildInput(_titreController, currentLang == 'ar' ? "المسمى الوظيفي" : (currentLang == 'en' ? "Job Title" : "Titre du poste"), isDark),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _buildInput(_expController, "Exp min", isDark, isNumber: true)),
+              Expanded(
+                child: _buildInput(
+                  _expController,
+                  currentLang == 'ar' ? "الخبرة الأدنى" : (currentLang == 'en' ? "Min Exp" : "Exp min"),
+                  isDark,
+                  isNumber: true
+                )
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: InkWell(
@@ -239,7 +282,9 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
                       color: isDark ? Colors.black26 : Colors.grey.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10)),
                     child: Text(
-                      _selectedDate == null ? "Date Exp." : DateFormat('dd/MM/yyyy').format(_selectedDate!),
+                      _selectedDate == null
+                          ? (currentLang == 'ar' ? "تاريخ الانتهاء" : "Date Exp.")
+                          : DateFormat('dd/MM/yyyy').format(_selectedDate!),
                       style: TextStyle(color: isDark ? Colors.white70 : Colors.black87)),
                   ),
                 ),
@@ -247,20 +292,24 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          _buildInput(_skillsController, "Compétences (ex: SQL, Java)", isDark),
+          _buildInput(_skillsController, currentLang == 'ar' ? "المهارات (مثال: SQL, Java)" : "Compétences (ex: SQL, Java)", isDark),
           const SizedBox(height: 10),
-          _buildInput(_descController, "Description", isDark, maxLines: 3),
+          _buildInput(_descController, currentLang == 'ar' ? "الوصف الوظيفي" : "Description", isDark, maxLines: 3),
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              onPressed: _handleSubmit,
+              onPressed: () => _handleSubmit(currentLang),
               style: ElevatedButton.styleFrom(
                 backgroundColor: ApiConfig.kPrimary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text(isEditing ? "Enregistrer" : "Publier"),
+              child: Text(
+                isEditing
+                    ? (currentLang == 'ar' ? "حفظ التغييرات" : "Enregistrer")
+                    : (currentLang == 'ar' ? "نشر العرض" : "Publier")
+              ),
             ),
           )
         ],
@@ -268,7 +317,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
     );
   }
 
-  Widget _buildOffreCard(Map o, ThemeData theme, bool isDark) {
+  Widget _buildOffreCard(Map o, ThemeData theme, bool isDark, String currentLang) {
     return Container(
       margin: const EdgeInsets.only(bottom: 15),
       padding: const EdgeInsets.all(15),
@@ -288,7 +337,7 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
               Row(
                 children: [
                   IconButton(onPressed: () => _handleEditClick(o), icon: const Icon(Icons.edit, color: Colors.blue, size: 20)),
-                  IconButton(onPressed: () => _showDeleteDialog(o['id']), icon: const Icon(Icons.delete, color: Colors.red, size: 20)),
+                  IconButton(onPressed: () => _showDeleteDialog(o['id'], currentLang), icon: const Icon(Icons.delete, color: Colors.red, size: 20)),
                 ],
               )
             ],
@@ -308,9 +357,14 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("⏳ Exp: ${o['experience_min']} ans", style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 12)),
-              Text("⌛ Expire: ${o['date_expiration'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(o['date_expiration'])) : 'N/A'}",
-                style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+              Text(
+                currentLang == 'ar' ? "⏳ الخبرة: ${o['experience_min']} سنوات" : "⏳ Exp: ${o['experience_min']} ans",
+                style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 12)
+              ),
+              Text(
+                "${currentLang == 'ar' ? '⌛ ينتهي في: ' : '⌛ Expire: '}${o['date_expiration'] != null ? DateFormat('dd/MM/yyyy').format(DateTime.parse(o['date_expiration'])) : 'N/A'}",
+                style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold)
+              ),
             ],
           )
         ],
@@ -335,27 +389,46 @@ class _ManageOffresScreenState extends State<ManageOffresScreen> {
     );
   }
 
-  void _showLimitDialog() {
-    showDialog(context: context, builder: (c) => AlertDialog(
-      title: const Text("⚠️ Limite atteinte"),
-      content: const Text("Veuillez activer un pack pour publier plus d'offres."),
-      actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text("OK"))],
-    ));
+  void _showLimitDialog(String currentLang) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E232D) : Colors.white,
+        title: Text(currentLang == 'ar' ? "⚠️ تم الوصول للحد الأقصى" : "⚠️ Limite atteinte"),
+        content: Text(currentLang == 'ar' ? "يرجى تفعيل إحدى الباقات لتتمكن من نشر المزيد من العروض." : "Veuillez activer un pack pour publier plus d'offres."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: Text(currentLang == 'ar' ? "موافق" : "OK")
+          )
+        ],
+      )
+    );
   }
 
-  void _showDeleteDialog(int id) {
-    showDialog(context: context, builder: (c) => AlertDialog(
-      title: const Text("Supprimer ?"),
-      content: const Text("Voulez-vous vraiment supprimer cette offre ?"),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(c), child: const Text("Annuler")),
-        TextButton(onPressed: () async {
-          final token = await _storage.read(key: 'access');
-          await http.delete(Uri.parse('${ApiConfig.baseUrl}/api/offres/$id/'), headers: {"Authorization": "Bearer $token"});
-          if (mounted) Navigator.pop(c);
-          _initData();
-        }, child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
-      ],
-    ));
+  void _showDeleteDialog(int id, String currentLang) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1E232D) : Colors.white,
+        title: Text(currentLang == 'ar' ? "حذف العرض؟" : "Supprimer ?"),
+        content: Text(currentLang == 'ar' ? "هل أنت متأكد من أنك تريد حذف هذا العرض نهائياً؟" : "Voulez-vous vraiment supprimer cette offre ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: Text(currentLang == 'ar' ? "إلغاء" : "Annuler", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54))
+          ),
+          TextButton(
+            onPressed: () async {
+              final token = await _storage.read(key: 'access');
+              await http.delete(Uri.parse('${ApiConfig.baseUrl}/api/offres/$id/'), headers: {"Authorization": "Bearer $token"});
+              if (mounted) Navigator.pop(c);
+              _initData();
+            },
+            child: Text(currentLang == 'ar' ? "حذف" : "Supprimer", style: const TextStyle(color: Colors.red))
+          ),
+        ],
+      )
+    );
   }
 }

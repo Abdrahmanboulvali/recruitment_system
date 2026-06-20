@@ -1,0 +1,17 @@
+{
+  "connexion": "تسجيل الدخول",
+  "emailHint": "البريد الإلكتروني",
+  "passwordHint": "كلمة المرور",
+  "forgotPassword": "هل نسيت كلمة المرور؟",
+  "loginSuccess": "تم تسجيل الدخول بنجاح",
+  "dashboard": "لوحة التحكم",
+  "subscriptions": "الاشتراكات",
+  "gestionOffres": "إدارة الوظائف",
+  "candidatures": "الترشيحات",
+  "monEntreprise": "شركتي",
+  "usersSystem": "مستخدمي النظام",
+  "monProfil": "ملفي الشخصي",
+  "deconnexion": "تسجيل الخروج",
+  "visualisationData": "عرض البيانات",
+  "dernieresActivites": "آخر الأنشطة"
+}
